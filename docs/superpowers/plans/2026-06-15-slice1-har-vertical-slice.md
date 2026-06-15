@@ -660,7 +660,7 @@ test('har is blocked at the office when the near door is shut', () => {
   har.difficulty = 20;
   s.doors.L = true;                   // shut -> blocked, retreats, no scare
   const rng = makeRng(5);
-  stepAI(s, 1, rng);
+  stepAI(s, 5, rng);                   // advance one full roll interval (moveRollEverySec)
   assert.equal(s.pendingScare, null);
   assert.ok(har.pathIndex < 3, 'har should be repelled by the shut door');
 });
