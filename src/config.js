@@ -36,8 +36,10 @@ export const CONFIG = {
     // Arg's cove "emergence" meter (0-100): fills while CAM7 is NOT being watched, drains
     // while you watch it. At 100 he sprints the right hall. Fill scales with difficulty so
     // later nights punish camera neglect harder. This is why watching the cove matters.
-    argEmergenceFillBasePerSec: 4.0,
-    argEmergenceRecoverPerSec: 14.0,
+    // Tuned DOWN (was 4.0 fill / 14 recover) — he was emerging far too often.
+    argEmergenceFillBasePerSec: 2.2,
+    argEmergenceRecoverPerSec: 18.0,
+    argWarnAt: 68,            // emergence % at which his running-footsteps tell plays ("he's coming")
   },
   // Window check: when a creature is at a side's door, flicking that side's light reveals it
   // peeking in that side's window. revealAtDoorOnly keeps it a real "blind-spot" check.
@@ -47,7 +49,7 @@ export const CONFIG = {
   // the monitor never flickers at the boundary.
   cameras: {
     raiseZone: 0.86,  // raise when mouse Y / height > this (bottom ~14% of screen)
-    lowerZone: 0.62,  // lower when mouse Y / height < this (top ~62%); gap = no-flicker band
+    lowerZone: 0.70,  // lower when mouse Y / height < this; gap to raiseZone = no-flicker band
   },
   // Power-out sequence beats (ms): everything dies → silence → music box → face flickers in
   // the dark → final scare. Longer than a blink so the dread can build.

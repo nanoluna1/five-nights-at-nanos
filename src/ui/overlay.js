@@ -23,7 +23,7 @@ export function createOverlay(rootEl, handlers) {
   menu.appendChild(menuRows);
   function menuRow(label, onClick, accent) {
     const r = el('div', `font-size:24px;margin:10px 0;cursor:pointer;color:${accent ? '#e8b23a' : '#8a8a90'};transition:color .12s,transform .12s;`, label);
-    r.onmouseenter = () => { r.style.color = '#e8b23a'; r.style.transform = 'translateX(8px)'; };
+    r.onmouseenter = () => { r.style.color = '#e8b23a'; r.style.transform = 'translateX(8px)'; if (typeof api.onMenuHover === 'function') api.onMenuHover(); };
     r.onmouseleave = () => { r.style.color = accent ? '#e8b23a' : '#8a8a90'; r.style.transform = 'none'; };
     r.onclick = onClick;
     menuRows.appendChild(r); return r;
@@ -113,14 +113,12 @@ export function createOverlay(rootEl, handlers) {
   const camBtns = {};
   // [id, label, left%, top%, width%, height%] — matches the UI reference layout
   const layout = [
-    ['CAM1A', 'CAM 1A stage', 12, 1, 38, 17],
-    ['CAM1B', 'CAM 1B dining', 54, 1, 38, 17],
-    ['CAM5', 'CAM 5 backstage', 1, 26, 26, 17],
-    ['CAM2', 'CAM 2 hall L', 31, 26, 30, 17],
-    ['CAM4', 'CAM 4 hall R', 65, 26, 30, 17],
-    ['CAM3', 'CAM 3 closet', 12, 51, 30, 17],
-    ['CAM6', 'CAM 6 kitchen', 50, 51, 30, 17],
-    ['CAM7', 'CAM 7 cove', 1, 51, 9, 17],
+    ['CAM1A', 'CAM 1A stage', 7, 2, 41, 20],
+    ['CAM1B', 'CAM 1B dining', 52, 2, 41, 20],
+    ['CAM2', 'CAM 2 hall L', 7, 28, 41, 20],
+    ['CAM4', 'CAM 4 hall R', 52, 28, 41, 20],
+    ['CAM3', 'CAM 3 closet', 7, 54, 41, 20],
+    ['CAM7', 'CAM 7 cove', 52, 54, 41, 20],
   ];
   for (const [id, label, x, y, w, ht] of layout) {
     const active = ACTIVE.has(id);
@@ -162,6 +160,7 @@ export function createOverlay(rootEl, handlers) {
     onDoor: null,
     onLight: null,
     onPhoneLine: null,
+    onMenuHover: null,
     showPhone(lines, ms) { phoneLines = lines || []; phoneMs = ms || 5000; phoneIdx = 0; if (!phoneLines.length) return; phoneBox.style.display = 'block'; phoneRender(); phoneTimerReset(); },
     hidePhone() { clearTimeout(phoneTimer); phoneBox.style.display = 'none'; },
     showMenu(saveInfo) {
@@ -170,7 +169,7 @@ export function createOverlay(rootEl, handlers) {
       nightWrap.innerHTML = ''; nightWrap.style.display = 'none';
       for (let n = 1; n <= max; n++) {
         const nb = el('div', 'padding:6px 12px;border:1px solid #3a3942;color:#cfcabb;cursor:pointer;font-size:16px;', String(n));
-        nb.onmouseenter = () => nb.style.borderColor = '#e8b23a';
+        nb.onmouseenter = () => { nb.style.borderColor = '#e8b23a'; if (typeof api.onMenuHover === 'function') api.onMenuHover(); };
         nb.onmouseleave = () => nb.style.borderColor = '#3a3942';
         nb.onclick = () => h.onNightSelect && h.onNightSelect(n);
         nightWrap.appendChild(nb);

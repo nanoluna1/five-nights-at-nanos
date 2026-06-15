@@ -24,8 +24,13 @@ let prevRoom = {};            // per-creature last room, for static-on-movement
 let prevAtDoor = {};          // per-creature last atDoor side, to fire the urgent tell once
 let warnedLowPower = false;
 let scareRunning = false;
+let argWarned = false;        // so Arg's footsteps warning fires once per emergence
 
 const TELL = { har: () => audio.harTell(), gi: () => audio.giTell(), cluck: () => audio.cluckTell(), arg: () => audio.argTell() };
+
+// Browsers keep the AudioContext suspended until a user gesture; resume on the first
+// click anywhere so menu hover ticks and other cues can sound.
+window.addEventListener('pointerdown', () => audio.resume(), { once: true });
 
 const overlay = createOverlay(app, {
   onNewGame: () => startNight(1),
@@ -47,6 +52,7 @@ function startNight(night) {
   for (const [name, a] of Object.entries(state.animatronics)) { prevRoom[name] = a.room; prevAtDoor[name] = a.atDoor; }
   warnedLowPower = false;
   scareRunning = false;
+  argWarned = false;
   audio.startAmbient();
   overlay.showNightCard(night);
   state.phase = 'nightStart';
@@ -63,15 +69,22 @@ function startNight(night) {
 function toggleDoor(side) { state.doors[side] = !state.doors[side]; audio.oneShot(state.doors[side] ? 'doorSlam' : 'doorOpen'); }
 function toggleLight(side) { state.lights[side] = !state.lights[side]; audio.oneShot('lightClick'); }
 
-// ---- camera raise/lower ----
-function raiseCams() { if (state.monitorUp) return; if (setMonitor(state, true)) { audio.oneShot('monitorWhir'); world.setCamView(state.activeCam); } }
-function lowerCams() { if (!state.monitorUp) return; if (setMonitor(state, false)) { audio.oneShot('monitorWhir'); world.setOfficeView(); } }
+// ---- camera raise/lower (hover-driven, with an arm latch) ----
+// camArmed prevents the bug where lowering while the mouse is still in the bottom hover zone
+// instantly snaps the monitor back up. Lowering disarms; moving the mouse up re-arms.
+let camArmed = true;
+function raiseCams() { if (state.monitorUp || !camArmed) return; if (setMonitor(state, true)) { audio.oneShot('monitorWhir'); world.setCamView(state.activeCam); } }
+function lowerCams() { if (!state.monitorUp) return; if (setMonitor(state, false)) { audio.oneShot('monitorWhir'); world.setOfficeView(); state.flashlight.on = false; } } // flashlight is a camera tool; off when we drop
 
-overlay.onToggleMonitor = () => { if (!state || state.phase !== 'playing') return; state.monitorUp ? lowerCams() : raiseCams(); };
+overlay.onToggleMonitor = () => {
+  if (!state || state.phase !== 'playing') return;
+  if (state.monitorUp) { lowerCams(); camArmed = false; } else { camArmed = true; raiseCams(); }
+};
 overlay.onSelectCam = (camId) => { if (!state || state.phase !== 'playing' || !state.monitorUp) return; if (switchCam(state, camId)) { audio.oneShot('camBlip'); world.setCamView(state.activeCam); world.staticBurst(); } };
 overlay.onDoor = (side) => { if (state && state.phase === 'playing') toggleDoor(side); };
 overlay.onLight = (side) => { if (state && state.phase === 'playing') toggleLight(side); };
 overlay.onPhoneLine = () => audio.phoneBlip(); // soft blip as each line appears
+overlay.onMenuHover = () => audio.menuHover();  // hover tick on menu rows
 
 // Hover-to-open cameras: dipping the mouse into the bottom `raiseZone` raises the monitor;
 // moving back above `lowerZone` lowers it. The gap between the two is hysteresis so it can't
@@ -79,8 +92,8 @@ overlay.onPhoneLine = () => audio.phoneBlip(); // soft blip as each line appears
 window.addEventListener('mousemove', (e) => {
   if (!state || state.phase !== 'playing') return;
   const fy = e.clientY / window.innerHeight;
-  if (!state.monitorUp && fy > CONFIG.cameras.raiseZone) raiseCams();
-  else if (state.monitorUp && fy < CONFIG.cameras.lowerZone) lowerCams();
+  if (fy < CONFIG.cameras.lowerZone) { camArmed = true; if (state.monitorUp) lowerCams(); } // moving up lowers + re-arms
+  else if (fy > CONFIG.cameras.raiseZone) raiseCams();                                       // dipping to the bottom raises
 });
 
 // Keyboard still works: A/D doors, Q/E lights, F flashlight, C cameras toggle, 1/2/3/4/7 cams.
@@ -91,7 +104,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'd') toggleDoor('R');
   else if (k === 'q') toggleLight('L');
   else if (k === 'e') toggleLight('R');
-  else if (k === 'f') { state.flashlight.on = !state.flashlight.on && state.flashlight.charge > 0; }
+  else if (k === 'f') { if (state.monitorUp) state.flashlight.on = !state.flashlight.on && state.flashlight.charge > 0; } // flashlight only on cameras
   else if (k === 'c') overlay.onToggleMonitor();
   else if (['1', '2', '3', '4', '7'].includes(k) && state.monitorUp) {
     const map = { '1': 'CAM1A', '2': 'CAM2', '3': 'CAM3', '4': 'CAM4', '7': 'CAM7' };
@@ -115,6 +128,11 @@ function tick() {
     if (a.atDoor && !prevAtDoor[name]) TELL[name](); // fires once when it arrives at the door
     prevAtDoor[name] = a.atDoor;
   }
+
+  // Arg's escalating running footsteps as his cove meter spikes — your cue he's about to sprint
+  const arg = state.animatronics.arg;
+  if (arg.emergence >= CONFIG.ai.argWarnAt && !argWarned) { audio.argTell(); argWarned = true; }
+  else if (arg.emergence < 40) argWarned = false;
 
   if (!warnedLowPower && state.power <= CONFIG.audio.lowPowerWarnAt) { audio.oneShot('lowPowerWarn'); warnedLowPower = true; }
 

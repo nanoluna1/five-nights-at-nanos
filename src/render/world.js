@@ -61,6 +61,12 @@ export function createWorld(mountEl) {
     // doorway + sliding blast-door — agy art; closedAmt drives the slide (eased from state)
     const closedAmt = (doorAnim[side] += ((state.doors[side] ? 1 : 0) - doorAnim[side]) * 0.4);
     drawDoorway(ctx, doorX, top, 200, hgt, closedAmt);
+    // the light ALSO reveals a creature standing in the doorway (in the part still open
+    // below the descending door) — so a light-check covers both the window and the door.
+    if (lit && lurk && closedAmt < 0.85) {
+      ctx.save(); ctx.beginPath(); ctx.rect(doorX + 20, top + hgt * closedAmt, 160, hgt * (1 - closedAmt)); ctx.clip();
+      DRAW[lurk](doorX + 100, top + hgt * 0.62, 0.9, 1.35); ctx.restore();
+    }
   }
   // which creature (if any) is lurking right outside `side`'s door
   function lit_creature(state, side) {
@@ -85,6 +91,12 @@ export function createWorld(mountEl) {
     for (const [name, a] of Object.entries(state.animatronics || {})) {
       if (a.room === id && !a.atDoor) DRAW[name](W / 2 + hashShift(name), H * 0.5, Math.min(W, H) / 340, 1.2);
     }
+    // flashlight is camera-only: brightens the current feed
+    if (state.flashlight && state.flashlight.on) {
+      const g = ctx.createRadialGradient(W / 2, H * 0.45, 60, W / 2, H * 0.45, H * 0.85);
+      g.addColorStop(0, 'rgba(255,250,230,0.30)'); g.addColorStop(1, 'rgba(255,250,230,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
     drawScanlines();
     ctx.fillStyle = '#7aa7d8'; ctx.font = '16px monospace'; ctx.fillText(room.name, 30, H - 40);
   }
@@ -106,10 +118,9 @@ export function createWorld(mountEl) {
     if (monitorUp) drawCamera(state); else drawOffice(state);
 
     if (!monitorUp && !lurkFace && !jumpResolve) {
-      const flOn = state.flashlight && state.flashlight.on;
-      let darkness = (1 - dim) * 0.8 + 0.1; if (flOn) darkness = Math.max(0, darkness - 0.45);
+      // office darkness scales with power; flashlight is a CAMERA tool now (handled in drawCamera)
+      const darkness = (1 - dim) * 0.8 + 0.1;
       ctx.fillStyle = `rgba(2,3,6,${darkness})`; ctx.fillRect(-ox, -oy, W, H);
-      if (flOn) { const cx = W * (0.5 + (panX - 0.5) * 0.6); const g = ctx.createRadialGradient(cx, H * 0.5, 40, cx, H * 0.5, H * 0.75); g.addColorStop(0, 'rgba(255,250,230,0.22)'); g.addColorStop(1, 'rgba(255,250,230,0)'); ctx.fillStyle = g; ctx.fillRect(-ox, -oy, W, H); }
     }
 
     if (staticTimer > 0) { staticTimer -= dt; drawStatic(Math.min(0.8, staticTimer * 2.2)); }

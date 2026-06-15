@@ -90,6 +90,8 @@ export function createAudio() {
     }
   }
   function phoneBlip() { const t = ctx.currentTime; const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 520; const g = ctx.createGain(); g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05); o.connect(g).connect(buses.sfx); o.start(t); o.stop(t + 0.06); }
+  // soft UI hover tick for menu rows
+  function menuHover() { const t = ctx.currentTime; const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 660; const g = ctx.createGain(); g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07); o.connect(g).connect(buses.sfx); o.start(t); o.stop(t + 0.08); }
 
   function oneShot(name) {
     const t = ctx.currentTime;
@@ -165,5 +167,5 @@ export function createAudio() {
   function setMuted(m) { master.gain.value = m ? 0 : 0.9; }
   function resume() { if (ctx.state === 'suspended') ctx.resume(); } // unlock after a user gesture
 
-  return { ctx, resume, startAmbient, harTell, giTell, cluckTell, argTell, phoneRing, phoneBlip, oneShot, powerOutSequence, setMuted };
+  return { ctx, resume, startAmbient, harTell, giTell, cluckTell, argTell, phoneRing, phoneBlip, menuHover, oneShot, powerOutSequence, setMuted };
 }
