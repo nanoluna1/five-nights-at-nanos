@@ -138,14 +138,32 @@ export function createOverlay(rootEl, handlers) {
   grid.appendChild(officeMark);
   hud.appendChild(mapWrap);
 
+  // ---- Phone Guy dialog box (non-blocking; plays over the office at night start) ----
+  const phoneBox = el('div', 'position:absolute;left:24px;bottom:92px;width:430px;display:none;pointer-events:auto;cursor:pointer;' +
+    'background:rgba(10,11,14,0.92);border:1px solid #2a2a30;border-left:4px solid #6fae7e;padding:12px 14px;font-family:monospace;');
+  const phoneHdr = el('div', 'font-size:11px;letter-spacing:1px;color:#6fae7e;margin-bottom:8px;display:flex;justify-content:space-between;');
+  const phoneFrom = el('span', '', '☏ ANSWERING MACHINE'); const phoneSkip = el('span', 'color:#8a8a90;', 'click / SPACE ▸');
+  phoneHdr.appendChild(phoneFrom); phoneHdr.appendChild(phoneSkip); phoneBox.appendChild(phoneHdr);
+  const phoneText = el('div', 'font-size:14px;line-height:1.45;color:#cfcabb;min-height:46px;'); phoneBox.appendChild(phoneText);
+  root.appendChild(phoneBox);
+  let phoneLines = [], phoneIdx = 0, phoneTimer = null, phoneMs = 5000;
+  function phoneRender() { phoneText.textContent = phoneLines[phoneIdx]; phoneFrom.textContent = `☏ NIGHT MESSAGE  (${phoneIdx + 1}/${phoneLines.length})`; if (typeof api.onPhoneLine === 'function') api.onPhoneLine(); }
+  function phoneTimerReset() { clearTimeout(phoneTimer); phoneTimer = setTimeout(phoneAdvance, phoneMs); }
+  function phoneAdvance() { phoneIdx++; if (phoneIdx >= phoneLines.length) { api.hidePhone(); return; } phoneRender(); phoneTimerReset(); }
+  phoneBox.onclick = phoneAdvance;
+  window.addEventListener('keydown', (e) => { if (phoneBox.style.display === 'block' && (e.key === ' ' || e.key === 'Spacebar')) { e.preventDefault(); phoneAdvance(); } });
+
   // helpers
-  function hideAll() { menu.style.display = 'none'; card.style.display = 'none'; over.style.display = 'none'; win.style.display = 'none'; hud.style.display = 'none'; }
+  function hideAll() { menu.style.display = 'none'; card.style.display = 'none'; over.style.display = 'none'; win.style.display = 'none'; hud.style.display = 'none'; api.hidePhone && api.hidePhone(); }
 
   const api = {
     onToggleMonitor: null,
     onSelectCam: null,
     onDoor: null,
     onLight: null,
+    onPhoneLine: null,
+    showPhone(lines, ms) { phoneLines = lines || []; phoneMs = ms || 5000; phoneIdx = 0; if (!phoneLines.length) return; phoneBox.style.display = 'block'; phoneRender(); phoneTimerReset(); },
+    hidePhone() { clearTimeout(phoneTimer); phoneBox.style.display = 'none'; },
     showMenu(saveInfo) {
       hideAll(); menu.style.display = 'flex';
       const max = (saveInfo && saveInfo.highestUnlocked) || 1;

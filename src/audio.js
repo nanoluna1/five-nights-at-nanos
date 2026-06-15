@@ -81,6 +81,16 @@ export function createAudio() {
     }
   }
 
+  // --- Phone Guy: a classic two-tone answering-machine ring, then a soft per-line blip ---
+  function phoneRing() {
+    const t = ctx.currentTime;
+    for (let r = 0; r < 2; r++) {
+      const st = t + r * 1.0;
+      for (const f of [440, 480]) { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f; const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(0.16, st + 0.04); g.gain.setValueAtTime(0.16, st + 0.4); g.gain.exponentialRampToValueAtTime(0.0001, st + 0.55); o.connect(g).connect(buses.sfx); o.start(st); o.stop(st + 0.6); }
+    }
+  }
+  function phoneBlip() { const t = ctx.currentTime; const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 520; const g = ctx.createGain(); g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05); o.connect(g).connect(buses.sfx); o.start(t); o.stop(t + 0.06); }
+
   function oneShot(name) {
     const t = ctx.currentTime;
     if (name === 'doorSlam') {
@@ -155,5 +165,5 @@ export function createAudio() {
   function setMuted(m) { master.gain.value = m ? 0 : 0.9; }
   function resume() { if (ctx.state === 'suspended') ctx.resume(); } // unlock after a user gesture
 
-  return { ctx, resume, startAmbient, harTell, giTell, cluckTell, argTell, oneShot, powerOutSequence, setMuted };
+  return { ctx, resume, startAmbient, harTell, giTell, cluckTell, argTell, phoneRing, phoneBlip, oneShot, powerOutSequence, setMuted };
 }

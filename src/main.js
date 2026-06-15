@@ -50,7 +50,13 @@ function startNight(night) {
   audio.startAmbient();
   overlay.showNightCard(night);
   state.phase = 'nightStart';
-  setTimeout(() => { if (state && state.night === night) { state.phase = 'playing'; overlay.showPlaying(); } }, 3000);
+  setTimeout(() => {
+    if (!state || state.night !== night) return;
+    state.phase = 'playing'; overlay.showPlaying();
+    // Phone Guy: ring, then the night's recorded handover appears (non-blocking).
+    const lines = CONFIG.phone[night];
+    if (lines) { audio.phoneRing(); setTimeout(() => { if (state && state.phase === 'playing') overlay.showPhone(lines, CONFIG.phone.msPerLine); }, 2200); }
+  }, 3000);
 }
 
 // ---- shared toggles (used by both keybinds and on-screen buttons) ----
@@ -65,6 +71,7 @@ overlay.onToggleMonitor = () => { if (!state || state.phase !== 'playing') retur
 overlay.onSelectCam = (camId) => { if (!state || state.phase !== 'playing' || !state.monitorUp) return; if (switchCam(state, camId)) { audio.oneShot('camBlip'); world.setCamView(state.activeCam); world.staticBurst(); } };
 overlay.onDoor = (side) => { if (state && state.phase === 'playing') toggleDoor(side); };
 overlay.onLight = (side) => { if (state && state.phase === 'playing') toggleLight(side); };
+overlay.onPhoneLine = () => audio.phoneBlip(); // soft blip as each line appears
 
 // Hover-to-open cameras: dipping the mouse into the bottom `raiseZone` raises the monitor;
 // moving back above `lowerZone` lowers it. The gap between the two is hysteresis so it can't

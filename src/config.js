@@ -63,4 +63,41 @@ export const CONFIG = {
   rooms: {
     harPath: ['CAM1A', 'CAM1B', 'CAM2'], // retained for any legacy reference; see ai.creatures
   },
+  // Phone Guy: a departing guard's recorded handover, played at the start of each night.
+  // Original writing (not derived from any existing game). Voice clips can be added later;
+  // for now each entry is the lines shown in the dialog box. msPerLine is the auto-advance.
+  phone: {
+    msPerLine: 5200,
+    1: [
+      "Uh— hey! Welcome to the night shift at Nano's. Just leaving you a few pointers.",
+      "The pizzeria's mascots… they get a little restless after midnight. Don't worry about it.",
+      "You've got a door and a light on each side. Flick a light to peek the window; slam the door if something's there.",
+      "It all runs on one breaker, so don't leave everything on — watch that power meter.",
+      "And keep an eye on the cameras. Especially the cove. You'll be fine. Probably.",
+    ],
+    2: [
+      "Hey, you made it back. Good.",
+      "So— the teal one, Gi. She's quick, comes up the left. Don't let her linger at the door.",
+      "If you hear clicking on your left, that's your cue. Light, then door.",
+      "Power's tighter tonight. Be stingy with it.",
+    ],
+    3: [
+      "Okay, third night. This is the one that gets people.",
+      "Cluck works the right side and he gets BOLD around now. That clucking on the right? Move.",
+      "And the croc — Arg — he hides in the cove. If you stop watching that camera, he runs. Right at you.",
+      "Watch the cove. I mean it.",
+    ],
+    4: [
+      "You're still here. Honestly didn't— anyway.",
+      "They're all moving fast now. Har too. He punishes you when the lights get low.",
+      "Don't tunnel on the cameras and don't tunnel on the doors. Balance it.",
+      "Almost done. Just… keep it together.",
+    ],
+    5: [
+      "Last one. If you clear tonight, you clear the week.",
+      "I won't sugarcoat it — they will not let up. Trust the tells, ration the power—",
+      "—wait. Is something in the—",
+      "…",
+    ],
+  },
 };
