@@ -5,14 +5,16 @@ export function createOverlay(rootEl, handlers) {
   const el = (tag, css, txt) => { const n = document.createElement(tag); if (css) n.style.cssText = css; if (txt != null) n.textContent = txt; return n; };
 
   // ---- root layer ----
-  const root = el('div', 'position:fixed;inset:0;z-index:10;font-family:Georgia,\'Times New Roman\',serif;color:#d8d4c8;user-select:none;');
+  // pointer-events:none so the 3D canvas underneath still receives mousemove (look-around);
+  // interactive children (menu, camera button, camera map) re-enable pointer-events.
+  const root = el('div', 'position:fixed;inset:0;z-index:10;pointer-events:none;font-family:Georgia,\'Times New Roman\',serif;color:#d8d4c8;user-select:none;');
   rootEl.appendChild(root);
 
   // grain backdrop used by menu/cards
   const grainCss = "background-image:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>\");opacity:0.06;";
 
   // =================== MENU ===================
-  const menu = el('div', 'position:absolute;inset:0;background:#050507;display:flex;flex-direction:column;justify-content:center;padding-left:9%;');
+  const menu = el('div', 'position:absolute;inset:0;background:#050507;display:flex;flex-direction:column;justify-content:center;padding-left:9%;pointer-events:auto;');
   const menuGrain = el('div', 'position:absolute;inset:0;pointer-events:none;' + grainCss); menu.appendChild(menuGrain);
   const title1 = el('div', "font-size:64px;font-weight:bold;letter-spacing:2px;color:#e6e2d6;text-shadow:0 0 18px rgba(0,0,0,0.9);position:relative;", 'Five Nights');
   const title2 = el('div', "font-size:46px;font-weight:bold;margin-left:60px;color:#e6e2d6;text-shadow:0 0 18px rgba(0,0,0,0.9);position:relative;", "at Nano's");

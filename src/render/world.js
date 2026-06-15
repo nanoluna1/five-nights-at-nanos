@@ -245,9 +245,19 @@ export function createWorld(THREE, mountEl) {
       if (monitorUp && state.activeCam && roomCams[state.activeCam]) activeCam = roomCams[state.activeCam];
       else activeCam = officeCam;
 
-      // office pan (smoothed)
+      // office pan (smoothed) + constant idle sway so the 3D depth is always obvious
       panYaw += (panTarget - panYaw) * Math.min(1, dt * 6);
-      officeCam.rotation.y = monitorUp ? 0 : panYaw;
+      if (!monitorUp && !jumpscaring) {
+        const t = performance.now() * 0.001;
+        officeCam.position.x = Math.sin(t * 0.45) * 0.12;          // gentle drift
+        officeCam.position.y = 1.8 + Math.sin(t * 0.62) * 0.04;    // breathing bob
+        officeCam.position.z = 6.6 + Math.sin(t * 0.3) * 0.06;
+        officeCam.rotation.y = panYaw + Math.sin(t * 0.33) * 0.05; // sway + mouse look
+        officeCam.rotation.x = -0.04 + Math.sin(t * 0.5) * 0.012;
+      } else {
+        officeCam.rotation.y = 0;
+        officeCam.position.set(0, 1.8, 6.6);
+      }
 
       // flashlight rides the active camera
       if (flashlight.visible) {
