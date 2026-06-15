@@ -2,6 +2,7 @@
 // animatronics, light-reveal window checks, camera feeds, power-out dread face, and
 // per-creature jumpscares. All procedural art (no external images). Reads from game state.
 import { drawHar, drawGi, drawCluck, drawArg } from './creatures.js'; // polished art via Google Antigravity CLI
+import { drawOfficeBackdrop, drawDoorway, drawWindow, drawRoom, drawJumpscareBg } from './scene.js'; // scene art via Google Antigravity CLI
 
 export function createWorld(mountEl) {
   const canvas = document.createElement('canvas');
@@ -40,59 +41,26 @@ export function createWorld(mountEl) {
     const sceneW = W * 1.7;
     const scroll = panX * (sceneW - W);
     ctx.save(); ctx.translate(-scroll, 0);
-
-    const wall = ctx.createLinearGradient(0, 0, 0, H); wall.addColorStop(0, '#5f6064'); wall.addColorStop(1, '#3c3d41');
-    ctx.fillStyle = wall; ctx.fillRect(0, 0, sceneW, H);
-    ctx.fillStyle = '#2a2a2e'; ctx.fillRect(0, H * 0.8, sceneW, 14);           // baseboard
-    ctx.fillStyle = '#303034'; ctx.fillRect(0, H * 0.82, sceneW, H * 0.18);    // floor
-
-    // "Have fun" poster with the four characters
-    const px = sceneW * 0.4, py = H * 0.06, pw = 300, ph = 270;
-    ctx.fillStyle = '#d9d6cc'; ctx.fillRect(px, py, pw, ph);
-    ctx.fillStyle = '#3a3a3a'; ctx.font = "bold 54px Georgia"; ctx.fillText('Have', px + 24, py + 70); ctx.fillText('fun', px + 36, py + 134);
-    const fc = ['#6b4f2a', '#2f6a72', '#c9a84a', '#3d6b2a'];
-    fc.forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(px + 60 + i * 60, py + 210, 24, 0, 7); ctx.fill(); ctx.strokeStyle = '#111'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(px + 60 + i * 60, py + 216, 11, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke(); });
-
-    // ceiling fan (rotating)
-    const fx = sceneW / 2, fy = H * 0.1;
-    ctx.strokeStyle = '#23242a'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(fx, 0); ctx.lineTo(fx, fy); ctx.stroke();
-    ctx.save(); ctx.translate(fx, fy); ctx.rotate(fanAngle); ctx.fillStyle = '#34353b'; for (let i = 0; i < 3; i++) { ctx.rotate((Math.PI * 2) / 3); ctx.beginPath(); ctx.ellipse(80, 0, 80, 14, 0, 0, 7); ctx.fill(); } ctx.fillStyle = '#4a4b52'; ctx.beginPath(); ctx.arc(0, 0, 16, 0, 7); ctx.fill(); ctx.restore();
-
-    // desk + monitor (glowing) + blue kettle
-    const dx = sceneW / 2;
-    ctx.fillStyle = '#3a2418'; ctx.beginPath(); ctx.moveTo(dx - 380, H); ctx.lineTo(dx - 310, H * 0.62); ctx.lineTo(dx + 310, H * 0.62); ctx.lineTo(dx + 380, H); ctx.fill();
-    ctx.fillStyle = '#2c2c30'; ctx.fillRect(dx + 40, H * 0.4, 240, 200);
-    const glow = state.monitorUp ? '#1a5a44' : '#0c2a20'; ctx.fillStyle = glow; ctx.fillRect(dx + 60, H * 0.43, 200, 150);
-    if (state.monitorUp) { ctx.save(); ctx.shadowColor = '#2aa07a'; ctx.shadowBlur = 40; ctx.fillStyle = 'rgba(40,160,120,0.25)'; ctx.fillRect(dx + 60, H * 0.43, 200, 150); ctx.restore(); }
-    ctx.fillStyle = '#10489a'; ctx.beginPath(); ctx.ellipse(dx - 150, H * 0.58, 64, 52, 0, 0, 7); ctx.fill(); ctx.strokeStyle = '#3aa0ff'; ctx.lineWidth = 13; ctx.beginPath(); ctx.arc(dx - 150, H * 0.5, 42, Math.PI, 2 * Math.PI); ctx.stroke();
-
-    // sides: window + doorway, mirrored
-    drawSide(0, 'L', state);
+    drawOfficeBackdrop(ctx, W, H, sceneW, fanAngle);   // detailed office art (via agy)
+    drawSide(0, 'L', state);                            // left window + doorway (edge band agy left clear)
     drawSide(sceneW - 430, 'R', state);
-
     ctx.restore();
   }
 
   function drawSide(baseX, side, state) {
     const doorX = side === 'L' ? baseX : baseX + 230;   // doorway nearer the screen edge
-    const winX = side === 'L' ? baseX + 240 : baseX;     // window beside it
-    const top = H * 0.14, hgt = H * 0.66;
+    const winX = side === 'L' ? baseX + 240 : baseX;    // window beside it
+    const top = H * 0.14, hgt = H * 0.66, wW = 190, wH = hgt * 0.7;
 
-    // --- window (the light-check blind spot) ---
+    // window (light-check blind spot) — agy art; creature revealed over the glass when lit
     const lit = state.lights[side];
-    ctx.fillStyle = '#1c1d22'; ctx.fillRect(winX, top, 190, hgt * 0.7);            // frame
-    ctx.fillStyle = lit ? '#6b6754' : '#0a0b10'; ctx.fillRect(winX + 12, top + 12, 166, hgt * 0.7 - 24); // glass/hall
-    // reveal a lurking creature in the window when the light is on
+    drawWindow(ctx, winX, top, wW, wH, lit);
     const lurk = lit_creature(state, side);
-    if (lit && lurk) { ctx.save(); ctx.beginPath(); ctx.rect(winX + 12, top + 12, 166, hgt * 0.7 - 24); ctx.clip(); DRAW[lurk](winX + 95, top + hgt * 0.55, 0.85, 1.3); ctx.restore(); }
-    ctx.strokeStyle = '#34333c'; ctx.lineWidth = 5; ctx.strokeRect(winX + 12, top + 12, 166, hgt * 0.7 - 24);
-    ctx.beginPath(); ctx.moveTo(winX + 95, top + 12); ctx.lineTo(winX + 95, top + hgt * 0.7 - 12); ctx.moveTo(winX + 12, top + hgt * 0.35); ctx.lineTo(winX + 178, top + hgt * 0.35); ctx.stroke();
+    if (lit && lurk) { ctx.save(); ctx.beginPath(); ctx.rect(winX + 12, top + 12, wW - 24, wH - 24); ctx.clip(); DRAW[lurk](winX + wW / 2, top + wH * 0.62, 0.8, 1.3); ctx.restore(); }
 
-    // --- doorway + sliding door ---
-    ctx.fillStyle = '#2a2520'; ctx.fillRect(doorX, top - 16, 200, hgt + 16);
-    ctx.fillStyle = '#0c0d11'; ctx.fillRect(doorX + 20, top, 160, hgt);
-    const a = (doorAnim[side] += ((state.doors[side] ? 1 : 0) - doorAnim[side]) * 0.4);
-    if (a > 0.01) { ctx.fillStyle = '#3a3f47'; ctx.fillRect(doorX + 20, top, 160, hgt * a); ctx.strokeStyle = '#23262b'; ctx.lineWidth = 4; for (let yy = top + 22; yy < top + hgt * a; yy += 24) { ctx.beginPath(); ctx.moveTo(doorX + 20, yy); ctx.lineTo(doorX + 180, yy); ctx.stroke(); } }
+    // doorway + sliding blast-door — agy art; closedAmt drives the slide (eased from state)
+    const closedAmt = (doorAnim[side] += ((state.doors[side] ? 1 : 0) - doorAnim[side]) * 0.4);
+    drawDoorway(ctx, doorX, top, 200, hgt, closedAmt);
   }
   // which creature (if any) is lurking right outside `side`'s door
   function lit_creature(state, side) {
@@ -112,18 +80,11 @@ export function createWorld(mountEl) {
   };
   function drawCamera(state) {
     const id = state.activeCam; const room = ROOMS[id] || ROOMS.CAM1A;
-    ctx.fillStyle = room.bg; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = room.accent; ctx.globalAlpha = 0.5; ctx.fillRect(0, H * 0.7, W, H * 0.3); ctx.globalAlpha = 1;
-    if (id === 'CAM1A') { ctx.fillStyle = '#5a1020'; ctx.fillRect(W * 0.15, H * 0.08, W * 0.7, H * 0.62); }
-    if (id === 'CAM7') { ctx.fillStyle = '#6a2a10'; ctx.fillRect(W * 0.22, H * 0.08, W * 0.56, H * 0.72); ctx.fillStyle = '#1a140d'; ctx.fillRect(W * 0.48, H * 0.08, W * 0.04, H * 0.72); }
-    if (id === 'CAM1B') for (let i = 0; i < 3; i++) { ctx.fillStyle = '#2a2a30'; ctx.beginPath(); ctx.ellipse(W * (0.3 + i * 0.2), H * 0.62, 70, 26, 0, 0, 7); ctx.fill(); }
-    if (id === 'CAM2' || id === 'CAM4') { ctx.fillStyle = '#000'; ctx.beginPath(); ctx.moveTo(W * 0.3, H * 0.2); ctx.lineTo(W * 0.7, H * 0.2); ctx.lineTo(W * 0.62, H * 0.8); ctx.lineTo(W * 0.38, H * 0.8); ctx.fill(); } // hall vanishing point
-    if (id === 'CAM3') { ctx.fillStyle = '#2a2a30'; ctx.fillRect(W * 0.35, H * 0.28, W * 0.3, H * 0.46); }
+    drawRoom(ctx, W, H, id, performance.now() / 1000);   // full-screen room art (via agy)
     // any creature physically in this room (not currently at a door)
     for (const [name, a] of Object.entries(state.animatronics || {})) {
-      if (a.room === id && !a.atDoor) DRAW[name](W / 2 + hashShift(name), H * 0.44, Math.min(W, H) / 360, 1.2);
+      if (a.room === id && !a.atDoor) DRAW[name](W / 2 + hashShift(name), H * 0.5, Math.min(W, H) / 340, 1.2);
     }
-    ctx.fillStyle = 'rgba(40,90,60,0.10)'; ctx.fillRect(0, 0, W, H);
     drawScanlines();
     ctx.fillStyle = '#7aa7d8'; ctx.font = '16px monospace'; ctx.fillText(room.name, 30, H - 40);
   }
@@ -160,7 +121,7 @@ export function createWorld(mountEl) {
     }
 
     if (jumpResolve) {
-      jumpT += dt; ctx.fillStyle = '#000'; ctx.fillRect(-ox, -oy, W, H);
+      jumpT += dt; drawJumpscareBg(ctx, W, H, jumpT);   // violent strobe backdrop (via agy)
       const s = Math.min(W, H) / 200 * (1 + jumpT * 0.5);
       DRAW[jumpName](W / 2 + (Math.random() - 0.5) * 34, H * 0.54 + (Math.random() - 0.5) * 34, s, 1.7);
       if (Math.sin(jumpT * 40) > 0) { ctx.fillStyle = 'rgba(120,0,0,0.28)'; ctx.fillRect(-ox, -oy, W, H); }
