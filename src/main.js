@@ -117,6 +117,7 @@ async function runPowerOut() {
   state.phase = 'powerout';
   state.doors.L = state.doors.R = false; state.lights.L = state.lights.R = false;
   state.flashlight.on = false; setMonitor(state, false);
+  world.setFlashlight(false);   // sync render facade so the beam dies with everything else
   world.setOfficeView(); world.dimForPower(0);
   await audio.powerOutSequence();   // die -> silence -> music box
   audio.oneShot('jumpscare');

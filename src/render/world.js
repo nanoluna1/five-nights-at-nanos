@@ -393,13 +393,14 @@ export function createWorld(THREE, mountEl) {
     },
     
     setDoor(side, closed) {
-      const isLeft = side.toLowerCase() === 'left';
+      // main.js passes 'L'/'R'; accept either that or 'left'/'right'.
+      const isLeft = side.toLowerCase()[0] === 'l';
       const target = isLeft ? leftDoor : rightDoor;
       target.position.y = closed ? 8 : 25;
     },
-    
+
     setLight(side, on) {
-      const isLeft = side.toLowerCase() === 'left';
+      const isLeft = side.toLowerCase()[0] === 'l';
       const target = isLeft ? leftLight : rightLight;
       target.intensity = on ? 1.5 : 0;
     },
