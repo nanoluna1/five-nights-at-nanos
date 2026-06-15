@@ -1,6 +1,8 @@
 // 2D canvas renderer. Front-on office with two doorways + two windows, four distinct
 // animatronics, light-reveal window checks, camera feeds, power-out dread face, and
 // per-creature jumpscares. All procedural art (no external images). Reads from game state.
+import { drawHar, drawGi, drawCluck, drawArg } from './creatures.js'; // polished art via Google Antigravity CLI
+
 export function createWorld(mountEl) {
   const canvas = document.createElement('canvas');
   canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:block;background:#000;';
@@ -23,67 +25,15 @@ export function createWorld(mountEl) {
   const nctx = noise.getContext('2d');
   function regenNoise() { const img = nctx.createImageData(noise.width, noise.height); for (let i = 0; i < img.data.length; i += 4) { const v = (Math.random() * 255) | 0; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; } nctx.putImageData(img, 0, 0); }
 
-  // ===================== animatronic art =====================
-  function drawHar(x, y, s, glow) { // dusk-brown owl, amber eyes, maroon bowtie, ear tufts
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    ctx.fillStyle = '#6b4f2a'; ctx.beginPath(); ctx.ellipse(0, 60, 60, 80, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#8a6b3c'; ctx.beginPath(); ctx.ellipse(0, 72, 34, 52, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#6b4f2a'; ctx.beginPath(); ctx.arc(0, -28, 56, 0, 7); ctx.fill();
-    ctx.fillStyle = '#4a3720'; ctx.beginPath(); ctx.moveTo(-52, -56); ctx.lineTo(-30, -106); ctx.lineTo(-14, -62); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(52, -56); ctx.lineTo(30, -106); ctx.lineTo(14, -62); ctx.fill();
-    eyes('#ff9810', glow, 22, -30, 22, 16);
-    ctx.fillStyle = '#d8943a'; ctx.beginPath(); ctx.moveTo(-12, -10); ctx.lineTo(12, -10); ctx.lineTo(0, 16); ctx.fill();
-    ctx.fillStyle = '#7a2030'; ctx.beginPath(); ctx.moveTo(-4, 122); ctx.lineTo(-34, 106); ctx.lineTo(-34, 138); ctx.fill(); ctx.beginPath(); ctx.moveTo(4, 122); ctx.lineTo(34, 106); ctx.lineTo(34, 138); ctx.fill(); ctx.fillStyle = '#5a1424'; ctx.fillRect(-7, 114, 14, 16);
-    ctx.restore();
-  }
-  function drawGi(x, y, s, glow) { // lanky teal-steel cat, tall ears, slit green eyes, keytar
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    ctx.fillStyle = '#2f6a72'; ctx.beginPath(); ctx.ellipse(0, 64, 46, 92, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#356470'; ctx.beginPath(); ctx.ellipse(0, -26, 46, 42, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#2f6a72'; ctx.beginPath(); ctx.moveTo(-40, -54); ctx.lineTo(-54, -118); ctx.lineTo(-14, -62); ctx.fill(); ctx.beginPath(); ctx.moveTo(40, -54); ctx.lineTo(54, -118); ctx.lineTo(14, -62); ctx.fill();
-    // slit green eyes
-    for (const sx of [-1, 1]) { ctx.fillStyle = '#0d1a18'; ctx.beginPath(); ctx.ellipse(sx * 18, -30, 13, 18, 0, 0, 7); ctx.fill();
-      ctx.save(); ctx.globalAlpha = glow; ctx.fillStyle = '#7CFF8A'; ctx.beginPath(); ctx.ellipse(sx * 18, -30, 5, 14, 0, 0, 7); ctx.fill(); ctx.restore(); }
-    ctx.strokeStyle = '#9fe1d2'; ctx.lineWidth = 2; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sx * 30, -22); ctx.lineTo(sx * 60, -26); ctx.stroke(); }
-    // keytar slung across
-    ctx.fillStyle = '#1d3b42'; ctx.fillRect(-58, 70, 116, 26); ctx.fillStyle = '#cfd8d6'; for (let i = 0; i < 7; i++) ctx.fillRect(-54 + i * 16, 74, 10, 18);
-    ctx.restore();
-  }
-  function drawCluck(x, y, s, glow) { // gold rooster, red comb, grease apron
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    ctx.fillStyle = '#c9a84a'; ctx.beginPath(); ctx.ellipse(0, 64, 54, 80, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#e8e2d2'; ctx.beginPath(); ctx.moveTo(-44, 40); ctx.lineTo(44, 40); ctx.lineTo(34, 150); ctx.lineTo(-34, 150); ctx.fill(); // apron
-    ctx.fillStyle = '#7a6a40'; ctx.beginPath(); ctx.arc(-10, 96, 7, 0, 7); ctx.arc(18, 120, 9, 0, 7); ctx.fill(); // grease stains
-    ctx.fillStyle = '#c9a84a'; ctx.beginPath(); ctx.arc(0, -28, 48, 0, 7); ctx.fill();
-    ctx.fillStyle = '#c0392b'; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(-16 + i * 16, -74, 12, 0, 7); ctx.fill(); } // comb
-    ctx.fillStyle = '#b0392b'; ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(6, -2); ctx.lineTo(0, 16); ctx.fill(); // wattle
-    eyes('#ef9f27', glow, 16, -34, 14, 9);
-    ctx.fillStyle = '#d8943a'; ctx.beginPath(); ctx.moveTo(-10, -22); ctx.lineTo(10, -22); ctx.lineTo(0, -6); ctx.fill();
-    ctx.restore();
-  }
-  function drawArg(x, y, s, glow) { // swamp-green pirate croc, eyepatch, hook
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-    ctx.fillStyle = '#3d6b2a'; ctx.beginPath(); ctx.ellipse(0, 70, 52, 80, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#3d6b2a'; ctx.beginPath(); ctx.ellipse(0, -24, 56, 40, 0, 0, 7); ctx.fill(); // head
-    ctx.fillStyle = '#2f5320'; ctx.fillRect(-58, -6, 116, 26); // snout
-    ctx.fillStyle = '#e8f0d8'; for (let i = 0; i < 7; i++) { ctx.beginPath(); ctx.moveTo(-54 + i * 18, 20); ctx.lineTo(-46 + i * 18, 4); ctx.lineTo(-38 + i * 18, 20); ctx.fill(); } // teeth
-    // eyepatch (right) + glowing eye (left)
-    ctx.fillStyle = '#111'; ctx.fillRect(8, -44, 30, 24); ctx.strokeStyle = '#111'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(8, -40); ctx.lineTo(-40, -48); ctx.stroke();
-    ctx.save(); ctx.globalAlpha = glow; ctx.fillStyle = '#97c459'; ctx.beginPath(); ctx.arc(-22, -34, 9, 0, 7); ctx.fill(); ctx.restore();
-    // hook
-    ctx.strokeStyle = '#b0b0b8'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(54, 80, 20, Math.PI * 0.2, Math.PI * 1.6); ctx.stroke();
-    ctx.restore();
-  }
-  function eyes(color, glow, dx, dy, socket, r) {
-    for (const sx of [-1, 1]) {
-      ctx.fillStyle = '#14100a'; ctx.beginPath(); ctx.arc(sx * dx, dy, socket, 0, 7); ctx.fill();
-      const g = ctx.createRadialGradient(sx * dx, dy, 1, sx * dx, dy, r); g.addColorStop(0, '#fff2c0'); g.addColorStop(0.5, color); g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.save(); ctx.globalAlpha = glow; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx * dx, dy, r, 0, 7); ctx.fill(); ctx.restore();
-      ctx.fillStyle = '#1a1308'; ctx.beginPath(); ctx.arc(sx * dx, dy, 4, 0, 7); ctx.fill();
-    }
-  }
-  const DRAW = { har: drawHar, gi: drawGi, cluck: drawCluck, arg: drawArg };
-  const CREATURE_NAME = { har: 'HAR', gi: 'GI', cluck: 'CLUCK', arg: 'ARG' };
+  // ===================== animatronic art (via Google Antigravity CLI) =====================
+  // Polished per-creature drawing lives in creatures.js; wrap them to bind the shared ctx
+  // so existing call sites keep using DRAW[name](x, y, scale, glow).
+  const DRAW = {
+    har: (x, y, s, g) => drawHar(ctx, x, y, s, g),
+    gi: (x, y, s, g) => drawGi(ctx, x, y, s, g),
+    cluck: (x, y, s, g) => drawCluck(ctx, x, y, s, g),
+    arg: (x, y, s, g) => drawArg(ctx, x, y, s, g),
+  };
 
   // ===================== office =====================
   function drawOffice(state) {
