@@ -90,9 +90,22 @@ export function createOverlay(rootEl, handlers) {
   camBtn.onclick = () => { if (typeof api.onToggleMonitor === 'function') api.onToggleMonitor(); };
   hud.appendChild(camBtn);
 
+  // ---- on-screen door + light buttons (primary control; keybinds still work) ----
+  function sideCluster(side, leftSide) {
+    const wrap = el('div', `position:absolute;${leftSide ? 'left' : 'right'}:16px;top:42%;transform:translateY(-50%);display:flex;flex-direction:column;gap:12px;pointer-events:auto;`);
+    const mk = (label) => el('div', 'width:92px;height:58px;border:2px solid #34333c;background:#15151a;color:#cfcabb;display:flex;align-items:center;justify-content:center;font-size:14px;letter-spacing:1px;cursor:pointer;border-radius:8px;transition:background .08s,border-color .08s;', label);
+    const door = mk('DOOR'), light = mk('LIGHT');
+    door.onclick = () => { if (typeof api.onDoor === 'function') api.onDoor(side); };
+    light.onclick = () => { if (typeof api.onLight === 'function') api.onLight(side); };
+    wrap.appendChild(door); wrap.appendChild(light); hud.appendChild(wrap);
+    return { door, light };
+  }
+  const ctlL = sideCluster('L', true);
+  const ctlR = sideCluster('R', false);
+
   // =================== CAMERA MAP ===================
   // Slice 1 models CAM1A/1B/3/7; the others are shown but inactive (no signal) until later slices.
-  const ACTIVE = new Set(['CAM1A', 'CAM1B', 'CAM3', 'CAM7']);
+  const ACTIVE = new Set(['CAM1A', 'CAM1B', 'CAM2', 'CAM4', 'CAM3', 'CAM7']);
   const mapWrap = el('div', 'position:absolute;bottom:70px;right:24px;width:320px;height:248px;display:none;pointer-events:auto;' +
     'background:rgba(8,9,12,0.85);border:1px solid #2a2a30;padding:10px;');
   mapWrap.appendChild(el('div', 'font-size:11px;letter-spacing:2px;color:#5a5a62;margin-bottom:6px;', 'CAMERA MAP'));
@@ -131,6 +144,8 @@ export function createOverlay(rootEl, handlers) {
   const api = {
     onToggleMonitor: null,
     onSelectCam: null,
+    onDoor: null,
+    onLight: null,
     showMenu(saveInfo) {
       hideAll(); menu.style.display = 'flex';
       const max = (saveInfo && saveInfo.highestUnlocked) || 1;
@@ -161,6 +176,12 @@ export function createOverlay(rootEl, handlers) {
       const camName = (!d.monitorUp || !d.camLabel || d.camLabel === '—') ? '—' : d.camLabel.replace('CAM', '');
       camLabel.textContent = 'CAM ' + camName + '  •  SIGNAL…';
       hud.style.opacity = d.powerPct < 25 ? (0.78 + Math.random() * 0.22).toFixed(2) : '1';
+      // door/light button active states
+      const dl = d.doors || {}, lt = d.lights || {};
+      ctlL.door.style.background = dl.L ? '#5a1e1e' : '#15151a'; ctlL.door.style.borderColor = dl.L ? '#e24b4a' : '#34333c';
+      ctlR.door.style.background = dl.R ? '#5a1e1e' : '#15151a'; ctlR.door.style.borderColor = dl.R ? '#e24b4a' : '#34333c';
+      ctlL.light.style.background = lt.L ? '#5a4a1a' : '#15151a'; ctlL.light.style.borderColor = lt.L ? '#e8b23a' : '#34333c';
+      ctlR.light.style.background = lt.R ? '#5a4a1a' : '#15151a'; ctlR.light.style.borderColor = lt.R ? '#e8b23a' : '#34333c';
       mapWrap.style.display = d.monitorUp ? 'block' : 'none';
       hint.style.display = d.monitorUp ? 'none' : 'block';
       if (d.monitorUp) for (const id in camBtns) { const c = camBtns[id]; if (c.active) c.node.style.background = (id === d.activeCam) ? 'rgba(58,109,122,0.45)' : 'transparent'; }

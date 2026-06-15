@@ -52,6 +52,35 @@ export function createAudio() {
     step.connect(sg).connect(buses.tells); step.start(t); step.stop(t + 0.3);
   }
 
+  // --- Gi: fast clicking footsteps, panned LEFT (his approach side) ---
+  function giTell() {
+    const t = ctx.currentTime; const p = ctx.createStereoPanner(); p.pan.value = -0.85; p.connect(buses.tells);
+    for (let i = 0; i < 6; i++) {
+      const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 880 + Math.random() * 220;
+      const g = ctx.createGain(); const st = t + i * 0.085;
+      g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(0.16, st + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, st + 0.05);
+      o.connect(g).connect(p); o.start(st); o.stop(st + 0.06);
+    }
+  }
+  // --- Cluck: distant clucking moan, panned RIGHT ---
+  function cluckTell() {
+    const t = ctx.currentTime; const p = ctx.createStereoPanner(); p.pan.value = 0.85; p.connect(buses.tells);
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(440, t); o.frequency.linearRampToValueAtTime(300, t + 0.5);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    o.connect(g).connect(p); o.start(t); o.stop(t + 0.75);
+  }
+  // --- Arg: escalating running footsteps (react now) ---
+  function argTell() {
+    const t = ctx.currentTime;
+    for (let i = 0; i < 8; i++) {
+      const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.1);
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 320;
+      const g = ctx.createGain(); const st = t + i * Math.max(0.06, 0.16 - i * 0.012);
+      g.gain.setValueAtTime(0.35 + i * 0.05, st); g.gain.exponentialRampToValueAtTime(0.001, st + 0.1);
+      src.connect(f).connect(g).connect(buses.tells); src.start(st);
+    }
+  }
+
   function oneShot(name) {
     const t = ctx.currentTime;
     if (name === 'doorSlam') {
@@ -98,29 +127,33 @@ export function createAudio() {
     }
   }
 
-  // Power-out sequence: everything dies -> silence -> slow music-box cue -> caller fires scare.
-  // Returns a promise that resolves after the music-box, so main.js can chain the final scare.
-  function powerOutSequence() {
+  // Power-out sequence: everything dies -> held silence -> a longer, dread-building original
+  // music-box cue. Timing comes from CONFIG.powerout so feel is tunable. Resolves when the
+  // music box finishes, so main.js can do the face-flicker beat and then the final scare.
+  function powerOutSequence(timing) {
+    const T = timing || {};
+    const dieMs = T.dieMs ?? 700, silenceMs = T.silenceMs ?? 1800, musicBoxMs = T.musicBoxMs ?? 6500;
     const a = loops.get('ambient');
-    if (a) a.g.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4); // everything dies
+    if (a) a.g.gain.linearRampToValueAtTime(0, ctx.currentTime + dieMs / 1000); // everything dies
     return new Promise(resolve => {
       setTimeout(() => {
         const t = ctx.currentTime;
-        const notes = [659, 784, 880, 659]; // sparse, slow, music-box-like
+        const notes = [659, 784, 880, 988, 784, 659, 587, 659, 523]; // slow, music-box-like lullaby gone wrong
+        const step = (musicBoxMs / 1000) / notes.length;
         notes.forEach((f, i) => {
           const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
-          const g = ctx.createGain(); const st = t + i * 0.55;
-          g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(0.3, st + 0.02);
-          g.gain.exponentialRampToValueAtTime(0.0001, st + 0.5);
-          o.connect(g).connect(buses.music); o.start(st); o.stop(st + 0.55);
+          const g = ctx.createGain(); const st = t + i * step;
+          g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(0.3, st + 0.03);
+          g.gain.exponentialRampToValueAtTime(0.0001, st + step * 0.92);
+          o.connect(g).connect(buses.music); o.start(st); o.stop(st + step);
         });
-        setTimeout(resolve, notes.length * 550 + 300);
-      }, 1500); // beat of silence after the lights die
+        setTimeout(resolve, musicBoxMs);
+      }, dieMs + silenceMs); // hold silence after the lights die before the box starts
     });
   }
 
   function setMuted(m) { master.gain.value = m ? 0 : 0.9; }
   function resume() { if (ctx.state === 'suspended') ctx.resume(); } // unlock after a user gesture
 
-  return { ctx, resume, startAmbient, harTell, oneShot, powerOutSequence, setMuted };
+  return { ctx, resume, startAmbient, harTell, giTell, cluckTell, argTell, oneShot, powerOutSequence, setMuted };
 }
