@@ -3,6 +3,8 @@
 // per-creature jumpscares. All procedural art (no external images). Reads from game state.
 import { drawHar, drawGi, drawCluck, drawArg } from './creatures.js'; // polished art via Google Antigravity CLI
 import { drawOfficeBackdrop, drawDoorway, drawWindow, drawRoom, drawJumpscareBg } from './scene.js'; // scene art via Google Antigravity CLI
+import { drawCove } from './cove.js';        // Arg's staged Pirate Cove (CAM7)
+import { CONFIG } from '../config.js';        // for Arg cove-stage thresholds
 
 export function createWorld(mountEl) {
   const canvas = document.createElement('canvas');
@@ -84,12 +86,21 @@ export function createWorld(mountEl) {
     CAM3:  { name: 'CAM 3 — CLOSET', bg: '#12121a', accent: '#3a3a5a' },
     CAM7:  { name: 'CAM 7 — PIRATE COVE', bg: '#1a140d', accent: '#6a3a10' },
   };
+  function argStage(a) {
+    if (!a) return 1;
+    if (a.committed) return 4;                              // left the cove (empty + sign)
+    if (a.emergence >= CONFIG.ai.argStage3At) return 3;    // out as a dark figure
+    if (a.emergence >= CONFIG.ai.argStage2At) return 2;    // curtains parted slightly
+    return 1;                                              // curtains closed
+  }
   function drawCamera(state) {
     const id = state.activeCam; const room = ROOMS[id] || ROOMS.CAM1A;
-    drawRoom(ctx, W, H, id, performance.now() / 1000);   // full-screen room art (via agy)
-    // any creature physically in this room (not currently at a door)
+    // CAM7 is Arg's staged cove (drawn by emergence stage); other cams use the agy room art
+    if (id === 'CAM7') drawCove(ctx, W, H, argStage(state.animatronics.arg), performance.now() / 1000);
+    else drawRoom(ctx, W, H, id, performance.now() / 1000);
+    // any creature physically in this room (Arg on CAM7 is drawn by the cove, so skip him there)
     for (const [name, a] of Object.entries(state.animatronics || {})) {
-      if (a.room === id && !a.atDoor) DRAW[name](W / 2 + hashShift(name), H * 0.5, Math.min(W, H) / 340, 1.2);
+      if (a.room === id && !a.atDoor && !(id === 'CAM7' && name === 'arg')) DRAW[name](W / 2 + hashShift(name), H * 0.5, Math.min(W, H) / 340, 1.2);
     }
     // flashlight is camera-only: brightens the current feed
     if (state.flashlight && state.flashlight.on) {

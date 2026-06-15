@@ -14,16 +14,23 @@ function resolveAtDoor(state, name, c, seconds) {
   a.doorTimer += seconds;
   if (state.doors[c.side]) {                 // shut in time -> retreat
     a.atDoor = null; a.doorTimer = 0;
-    if (c.cove) { a.emergence = 0; a.room = c.start; a.pathIndex = 0; }
+    if (c.cove) { a.emergence = 0; a.committed = false; a.transit = 0; a.room = c.start; a.pathIndex = 0; }
     else { a.pathIndex = c.path.length - 1; a.room = c.path[a.pathIndex]; }
     return;
   }
   if (a.doorTimer >= c.doorGraceSec) state.pendingScare = name; // lingered with door open
 }
 
-// Arg: fills a cove "emergence" meter while CAM7 is NOT being watched, drains it while you
-// watch. At 100 he sprints his side's hall to the door. Punishes camera neglect.
+// Arg: fills a cove "emergence" meter while CAM7 is NOT watched (drains while watched). The
+// meter drives 4 visual cove stages. At 100 he COMMITS — leaves the cove (stage 4: empty +
+// "out of order" sign) and, after argSprintDelaySec, arrives at the door. Once committed,
+// watching no longer pulls him back; only shutting the door when he arrives saves you.
 function stepArg(state, a, c, seconds) {
+  if (a.committed) {
+    a.transit += seconds;
+    if (a.transit >= CONFIG.ai.argSprintDelaySec) { a.atDoor = c.side; a.room = 'DOOR_' + c.side; a.doorTimer = 0; a.committed = false; }
+    return;
+  }
   const watched = state.monitorUp && state.activeCam === c.start; // c.start === 'CAM7'
   if (watched) {
     a.emergence = Math.max(0, a.emergence - CONFIG.ai.argEmergenceRecoverPerSec * seconds);
@@ -31,7 +38,7 @@ function stepArg(state, a, c, seconds) {
     const fill = CONFIG.ai.argEmergenceFillBasePerSec * (0.5 + a.difficulty / 20);
     a.emergence = Math.min(100, a.emergence + fill * seconds);
   }
-  if (a.emergence >= 100) { a.atDoor = c.side; a.room = 'DOOR_' + c.side; a.doorTimer = 0; }
+  if (a.emergence >= 100) { a.committed = true; a.transit = 0; } // leaves the cove → stage 4
 }
 
 // Advance all AI by `seconds`. rng() -> [0,1). Walking creatures roll to advance one room

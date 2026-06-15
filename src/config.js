@@ -40,6 +40,11 @@ export const CONFIG = {
     argEmergenceFillBasePerSec: 2.2,
     argEmergenceRecoverPerSec: 18.0,
     argWarnAt: 68,            // emergence % at which his running-footsteps tell plays ("he's coming")
+    // Cove emergence visual stages (by emergence %): 1 closed, 2 parted, 3 out-as-figure.
+    // At 100 he COMMITS (stage 4: empty cove + "out of order" sign) and, after a delay, sprints.
+    argStage2At: 30,
+    argStage3At: 60,
+    argSprintDelaySec: 12,    // after he leaves the cove (stage 4), seconds before he hits the door
   },
   // Window check: when a creature is at a side's door, flicking that side's light reveals it
   // peeking in that side's window. revealAtDoorOnly keeps it a real "blind-spot" check.

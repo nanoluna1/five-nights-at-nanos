@@ -25,6 +25,7 @@ let prevAtDoor = {};          // per-creature last atDoor side, to fire the urge
 let warnedLowPower = false;
 let scareRunning = false;
 let argWarned = false;        // so Arg's footsteps warning fires once per emergence
+let argPrevCommitted = false; // edge-detect Arg leaving the cove (start of his sprint)
 
 const TELL = { har: () => audio.harTell(), gi: () => audio.giTell(), cluck: () => audio.cluckTell(), arg: () => audio.argTell() };
 
@@ -53,6 +54,7 @@ function startNight(night) {
   warnedLowPower = false;
   scareRunning = false;
   argWarned = false;
+  argPrevCommitted = false;
   audio.startAmbient();
   overlay.showNightCard(night);
   state.phase = 'nightStart';
@@ -133,6 +135,8 @@ function tick() {
   const arg = state.animatronics.arg;
   if (arg.emergence >= CONFIG.ai.argWarnAt && !argWarned) { audio.argTell(); argWarned = true; }
   else if (arg.emergence < 40) argWarned = false;
+  if (arg.committed && !argPrevCommitted) audio.argTell(); // he's left the cove — sprinting now
+  argPrevCommitted = arg.committed;
 
   if (!warnedLowPower && state.power <= CONFIG.audio.lowPowerWarnAt) { audio.oneShot('lowPowerWarn'); warnedLowPower = true; }
 

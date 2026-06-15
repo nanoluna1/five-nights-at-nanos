@@ -12,6 +12,8 @@ export function createGameState(night) {
       atDoor: null,         // 'L' | 'R' when lurking right outside that door
       doorTimer: 0,         // seconds spent at the door (vs doorGraceSec)
       emergence: 0,         // Arg's cove meter (0-100); unused by others
+      committed: false,     // Arg: has left the cove (stage 4) and is in transit to the door
+      transit: 0,           // Arg: seconds since committing (vs argSprintDelaySec)
     };
   }
   return {
