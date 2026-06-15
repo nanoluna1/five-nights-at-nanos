@@ -5,3 +5,4 @@ Thumbs.db
 shot-*.png
 verify-shot.mjs
 package-lock.json
+powerout-verify.mjs
