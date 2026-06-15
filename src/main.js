@@ -61,6 +61,12 @@ overlay.onToggleMonitor = () => {
   }
 };
 
+// Camera selection from the on-screen camera map.
+overlay.onSelectCam = (camId) => {
+  if (!state || state.phase !== 'playing' || !state.monitorUp) return;
+  if (switchCam(state, camId)) { audio.oneShot('camBlip'); world.setCamView(state.activeCam); world.staticBurst(); }
+};
+
 // Keyboard: A/D doors, left/right lights (Q/E), C cameras, F flashlight, 1/2/3/7 cams.
 window.addEventListener('keydown', (e) => {
   if (!state || state.phase !== 'playing') return;
@@ -88,8 +94,10 @@ function tick() {
   const har = state.animatronics.har;
   if (har.pathIndex === CONFIG.rooms.harPath.length - 2 && har.moveTimer < dtTick) audio.harTell();
 
-  // Static-on-movement: feed distorts when Har changes rooms while you watch.
+  // Static-on-movement: feed distorts when Har changes rooms while you watch,
+  // and the owl mesh relocates so the cameras actually show him move.
   if (har.room !== prevRoom) {
+    world.setAnimatronicRoom('har', har.room);
     if (state.monitorUp) world.staticBurst();
     prevRoom = har.room;
   }
@@ -152,6 +160,8 @@ function frame(now) {
       night: state.night,
       flashlightPct: Math.round(state.flashlight.charge),
       camLabel: state.monitorUp ? state.activeCam : '—',
+      monitorUp: state.monitorUp,
+      activeCam: state.activeCam,
     });
   }
   if (state) world.render(state, dt);
