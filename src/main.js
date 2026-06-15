@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { createGameState } from './state.js';
 import { makeAccumulator, advanceClock, clockHour } from './clock.js';
@@ -14,7 +13,7 @@ import { createOverlay } from './ui/overlay.js';
 
 const app = document.getElementById('app');
 const audio = createAudio();
-const world = createWorld(THREE, app);
+const world = createWorld(app);
 const store = window.localStorage;
 
 let state = null;

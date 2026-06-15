@@ -1,327 +1,223 @@
-// Hand-authored render facade. (The Antigravity-CLI draft rendered an unlit, empty
-// scene — no visible office/doors and a non-functional flashlight — so this replaces it.)
-// One scene holds the office + four camera rooms. The office is deliberately lit enough
-// to SEE (dark/moody, not pitch black); power drain dims it toward black.
-export function createWorld(THREE, mountEl) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  mountEl.appendChild(renderer.domElement);
+// 2D canvas renderer (replaces the 3D version per the design pivot to a flat,
+// front-on office). Same facade contract the rest of the game drives — only the
+// drawing is 2D now. All art is procedural (no external images).
+export function createWorld(mountEl) {
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:block;background:#000;';
+  mountEl.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
 
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x06070b);
-  scene.fog = new THREE.FogExp2(0x06070b, 0.018);
+  let W = 0, H = 0;
+  function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+  window.addEventListener('resize', resize); resize();
 
-  // Low ambient so geometry is always faintly readable; mood comes from point lights.
-  const ambient = new THREE.AmbientLight(0x556070, 0.55);
-  scene.add(ambient);
+  // office is wider than the screen; pan reveals the side doors
+  let panTarget = 0.5, panX = 0.5;
+  canvas.addEventListener('pointermove', (e) => { panTarget = Math.max(0, Math.min(1, e.clientX / window.innerWidth)); });
 
-  // ---- shared materials ----
-  const matWall   = new THREE.MeshStandardMaterial({ color: 0x262a33, roughness: 0.95 });
-  const matFloor  = new THREE.MeshStandardMaterial({ color: 0x15161b, roughness: 1.0 });
-  const matMetal  = new THREE.MeshStandardMaterial({ color: 0x3a3f47, roughness: 0.55, metalness: 0.6 });
-  const matDoor   = new THREE.MeshStandardMaterial({ color: 0x2c2f36, roughness: 0.7, metalness: 0.4 });
-  const matFrame  = new THREE.MeshStandardMaterial({ color: 0x4a4030, roughness: 0.8 });
+  // animation/effect state
+  let harRoom = 'CAM1A';
+  let staticTimer = 0, shakeAmt = 0, dim = 1, jumpT = 0, jumpResolve = null;
 
-  // =================== OFFICE ===================
-  const office = new THREE.Group();
-  scene.add(office);
-
-  // floor / ceiling / back wall
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), matFloor);
-  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; office.add(floor);
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), matWall);
-  ceiling.rotation.x = Math.PI / 2; ceiling.position.y = 4; office.add(ceiling);
-  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), matWall);
-  backWall.position.set(0, 2, -2.2); office.add(backWall);
-
-  // a faint company poster on the back wall so the office reads as a room
-  const poster = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.4),
-    new THREE.MeshStandardMaterial({ color: 0x5a3a1a, roughness: 1, emissive: 0x140a02 }));
-  poster.position.set(-3, 2.2, -2.18); office.add(poster);
-
-  // side walls with door openings (built as pillars flanking each doorway)
-  function sideWall(sign) {
-    const g = new THREE.Group();
-    const x = sign * 4.2;
-    const back = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4, 3), matWall);
-    back.position.set(x, 2, -0.7); g.add(back);
-    office.add(g);
-    return g;
-  }
-  sideWall(-1); sideWall(1);
-
-  // doorways + sliding door panels + door lights
-  function makeDoor(sign) {
-    const x = sign * 3.0;
-    const grp = new THREE.Group();
-    // frame
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.4, 3.4, 2.2), matFrame);
-    frame.position.set(x, 1.7, 1.2); grp.add(frame);
-    // doorway opening (dark void with a hint of hallway)
-    const opening = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 3.0),
-      new THREE.MeshStandardMaterial({ color: 0x0a0b10, roughness: 1 }));
-    opening.position.set(x - sign * 0.21, 1.6, 1.2);
-    opening.rotation.y = sign * Math.PI / 2; grp.add(opening);
-    // sliding metal door panel (y is raised=open, lowered=closed)
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.0, 1.8), matMetal);
-    panel.position.set(x - sign * 0.21, 4.6, 1.2); panel.castShadow = true; grp.add(panel); // start open (up)
-    // door light (off by default)
-    const light = new THREE.PointLight(0xfff0c0, 0, 9, 2);
-    light.position.set(x - sign * 1.0, 2.3, 1.2); grp.add(light);
-    office.add(grp);
-    return { panel, light, sign, x };
-  }
-  const doorL = makeDoor(-1);
-  const doorR = makeDoor(1);
-
-  // desk + monitor in front of the player
-  const desk = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.15, 1.2), matMetal);
-  desk.position.set(0, 1.0, 4.4); desk.castShadow = true; desk.receiveShadow = true; office.add(desk);
-  const deskLeg = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.0, 0.1), matWall);
-  deskLeg.position.set(0, 0.5, 4.95); office.add(deskLeg);
-  const monitor = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.7, 0.08), matMetal);
-  monitor.position.set(0.7, 1.5, 4.5); monitor.rotation.y = -0.2; office.add(monitor);
-  const monitorScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.58),
-    new THREE.MeshStandardMaterial({ color: 0x123a2a, emissive: 0x0c2a1e, emissiveIntensity: 1 }));
-  monitorScreen.position.set(0.7, 1.5, 4.46); monitorScreen.rotation.y = -0.2; office.add(monitorScreen);
-
-  // ceiling fan (rotates; casts a moving shadow on the floor)
-  const fan = new THREE.Group();
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.2, 12), matMetal);
-  fan.add(hub);
-  for (let i = 0; i < 3; i++) {
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.04, 0.34), matMetal);
-    blade.position.x = 0.9; blade.castShadow = true;
-    const arm = new THREE.Group(); arm.add(blade); arm.rotation.y = (i * Math.PI * 2) / 3;
-    fan.add(arm);
-  }
-  fan.position.set(0, 3.7, 2.2); office.add(fan);
-
-  // office lighting: a warm overhead pool (shadow caster) + cool fill
-  const officeMain = new THREE.PointLight(0xffd9a0, 1.5, 22, 2);
-  officeMain.position.set(0, 3.5, 2.5); officeMain.castShadow = true;
-  officeMain.shadow.mapSize.set(1024, 1024); office.add(officeMain);
-  const officeFill = new THREE.PointLight(0x6678aa, 0.5, 18, 2);
-  officeFill.position.set(0, 2.2, 5.5); office.add(officeFill);
-
-  // =================== CAMERA ROOMS ===================
-  const roomCams = {};
-  const roomAnchors = {};
-  function buildRoom(id, center, accent, propFn) {
-    const grp = new THREE.Group(); grp.position.copy(center); scene.add(grp);
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), matFloor);
-    f.rotation.x = -Math.PI / 2; grp.add(f);
-    const w1 = new THREE.Mesh(new THREE.PlaneGeometry(14, 5), matWall); w1.position.set(0, 2.5, -7); grp.add(w1);
-    const w2 = new THREE.Mesh(new THREE.PlaneGeometry(14, 5), matWall); w2.position.set(-7, 2.5, 0); w2.rotation.y = Math.PI / 2; grp.add(w2);
-    const w3 = new THREE.Mesh(new THREE.PlaneGeometry(14, 5), matWall); w3.position.set(7, 2.5, 0); w3.rotation.y = -Math.PI / 2; grp.add(w3);
-    // each room has its own dim light so its feed is visible (greenish night look)
-    const rl = new THREE.PointLight(accent, 0.9, 26, 2); rl.position.set(0, 4, 2); grp.add(rl);
-    grp.add(new THREE.AmbientLight(accent, 0.25));
-    if (propFn) propFn(grp);
-    // camera looking into the room
-    const cam = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 200);
-    cam.position.set(center.x, center.y + 2.2, center.z + 6.5);
-    cam.lookAt(center.x, center.y + 1.4, center.z - 2);
-    roomCams[id] = cam;
-    const anchor = new THREE.Vector3(center.x, center.y, center.z - 1);
-    roomAnchors[id] = anchor;
-    return grp;
+  // small reusable noise tile for TV static
+  const noise = document.createElement('canvas'); noise.width = 160; noise.height = 90;
+  const nctx = noise.getContext('2d');
+  function regenNoise() {
+    const img = nctx.createImageData(noise.width, noise.height);
+    for (let i = 0; i < img.data.length; i += 4) { const v = (Math.random() * 255) | 0; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+    nctx.putImageData(img, 0, 0);
   }
 
-  buildRoom('CAM1A', new THREE.Vector3(0, 0, -45), 0x88ffaa, (g) => {
-    // show stage: a low platform + backdrop curtain
-    const stage = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 4), matMetal); stage.position.set(0, 0.25, -2); g.add(stage);
-    const curtain = new THREE.Mesh(new THREE.PlaneGeometry(10, 5),
-      new THREE.MeshStandardMaterial({ color: 0x5a1020, roughness: 1 })); curtain.position.set(0, 2.5, -6.8); g.add(curtain);
-  });
-  buildRoom('CAM1B', new THREE.Vector3(24, 0, -45), 0x88ccff, (g) => {
-    for (let i = -1; i <= 1; i++) { const t = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.2, 16), matMetal); t.position.set(i * 3, 1, -1); g.add(t); }
-  });
-  buildRoom('CAM3', new THREE.Vector3(-24, 0, -24), 0xaaaaff, (g) => {
-    const shelf = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 0.6), matWall); shelf.position.set(0, 1.5, -4); g.add(shelf);
-  });
-  buildRoom('CAM7', new THREE.Vector3(26, 0, -16), 0xffcc66, (g) => {
-    const curtain = new THREE.Mesh(new THREE.PlaneGeometry(7, 5),
-      new THREE.MeshStandardMaterial({ color: 0x6a2a10, roughness: 1 })); curtain.position.set(0, 2.5, -3); g.add(curtain);
-  });
-
-  // =================== HAR (owl) ===================
-  function buildHar() {
-    const g = new THREE.Group();
-    const brown = new THREE.MeshStandardMaterial({ color: 0x6b4f2a, roughness: 0.8, metalness: 0.2 });
-    const darkBrown = new THREE.MeshStandardMaterial({ color: 0x4a3720, roughness: 0.85, metalness: 0.2 });
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.9, 20, 16), brown); body.scale.set(1, 1.25, 1); body.position.y = 1.0; g.add(body);
-    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.62, 18, 14),
-      new THREE.MeshStandardMaterial({ color: 0x8a6b3c, roughness: 0.85 })); belly.scale.set(1, 1.25, 0.6); belly.position.set(0, 0.95, 0.55); g.add(belly);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.75, 20, 16), brown); head.position.y = 2.15; g.add(head);
+  // ---------- the Har owl, drawn flat ----------
+  function drawOwl(x, y, s, glow) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    // body
+    ctx.fillStyle = '#6b4f2a'; ctx.beginPath(); ctx.ellipse(0, 60, 60, 78, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#8a6b3c'; ctx.beginPath(); ctx.ellipse(0, 70, 36, 52, 0, 0, 7); ctx.fill();
+    // head
+    ctx.fillStyle = '#6b4f2a'; ctx.beginPath(); ctx.arc(0, -28, 56, 0, 7); ctx.fill();
     // ear tufts
-    for (const sx of [-1, 1]) { const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.6, 8), darkBrown); tuft.position.set(sx * 0.42, 2.85, 0); tuft.rotation.z = sx * 0.3; g.add(tuft); }
-    // eyes (amber, emissive — the menacing glow)
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffb024, emissive: 0xff9810, emissiveIntensity: 1.4, roughness: 0.3 });
-    const eyes = [];
+    ctx.fillStyle = '#4a3720';
+    ctx.beginPath(); ctx.moveTo(-52, -56); ctx.lineTo(-30, -104); ctx.lineTo(-16, -62); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(52, -56); ctx.lineTo(30, -104); ctx.lineTo(16, -62); ctx.fill();
+    // eyes (amber glow)
     for (const sx of [-1, 1]) {
-      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 12), new THREE.MeshStandardMaterial({ color: 0x14100a })); socket.position.set(sx * 0.3, 2.25, 0.6); g.add(socket);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 12), eyeMat); eye.position.set(sx * 0.3, 2.25, 0.72); g.add(eye); eyes.push(eye);
+      ctx.fillStyle = '#14100a'; ctx.beginPath(); ctx.arc(sx * 22, -30, 22, 0, 7); ctx.fill();
+      const g = ctx.createRadialGradient(sx * 22, -30, 1, sx * 22, -30, 16);
+      g.addColorStop(0, '#ffe08a'); g.addColorStop(0.5, '#ff9810'); g.addColorStop(1, 'rgba(255,120,0,0)');
+      ctx.fillStyle = g; ctx.globalAlpha = glow; ctx.beginPath(); ctx.arc(sx * 22, -30, 16, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = '#1a1308'; ctx.beginPath(); ctx.arc(sx * 22, -30, 5, 0, 7); ctx.fill();
     }
     // beak
-    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.34, 4), new THREE.MeshStandardMaterial({ color: 0xd8943a, roughness: 0.6 }));
-    beak.position.set(0, 2.0, 0.78); beak.rotation.x = Math.PI / 2; g.add(beak);
+    ctx.fillStyle = '#d8943a'; ctx.beginPath(); ctx.moveTo(-12, -10); ctx.lineTo(12, -10); ctx.lineTo(0, 14); ctx.fill();
     // maroon bowtie
-    for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.4, 4), new THREE.MeshStandardMaterial({ color: 0x7a2030, roughness: 0.7 })); w.position.set(sx * 0.22, 1.35, 0.78); w.rotation.z = Math.PI / 2 * sx; g.add(w); }
-    g.scale.set(1.1, 1.1, 1.1);
-    return { group: g, eyes };
+    ctx.fillStyle = '#7a2030';
+    ctx.beginPath(); ctx.moveTo(-4, 120); ctx.lineTo(-34, 104); ctx.lineTo(-34, 136); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(4, 120); ctx.lineTo(34, 104); ctx.lineTo(34, 136); ctx.fill();
+    ctx.fillStyle = '#5a1424'; ctx.fillRect(-7, 112, 14, 16);
+    ctx.restore();
   }
-  const har = buildHar();
-  har.group.visible = false;
-  scene.add(har.group);
 
-  // =================== OFFICE CAMERA + flashlight ===================
-  const officeCam = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
-  officeCam.position.set(0, 1.8, 6.6);
-  officeCam.rotation.set(-0.04, 0, 0); // look slightly down the room toward both doors
+  // ---------- the office (panoramic, front-on) ----------
+  function drawOffice(state) {
+    const sceneW = W * 1.6;
+    const scroll = panX * (sceneW - W);
+    ctx.save(); ctx.translate(-scroll, 0);
 
-  // flashlight follows whichever camera is active so it always lights the current view
-  const flashlight = new THREE.SpotLight(0xffffff, 0, 30, Math.PI / 7, 0.4, 1.2);
-  flashlight.visible = false;
-  scene.add(flashlight); scene.add(flashlight.target);
+    // wall
+    const wall = ctx.createLinearGradient(0, 0, 0, H);
+    wall.addColorStop(0, '#6f6f73'); wall.addColorStop(1, '#4c4c50');
+    ctx.fillStyle = wall; ctx.fillRect(0, 0, sceneW, H);
+    // floor
+    ctx.fillStyle = '#37373b'; ctx.fillRect(0, H * 0.82, sceneW, H * 0.18);
 
-  // office look-around (pure view pan; does not touch game state)
-  let panYaw = 0, panTarget = 0;
-  renderer.domElement.addEventListener('pointermove', (e) => {
-    const nx = (e.clientX / window.innerWidth) * 2 - 1; // -1..1
-    panTarget = -nx * 0.5; // mouse right -> look right
-  });
+    // "Have Fun" poster with the four characters
+    const px = sceneW * 0.12, py = H * 0.08, pw = 320, ph = 300;
+    ctx.fillStyle = '#d9d6cc'; ctx.fillRect(px, py, pw, ph);
+    ctx.fillStyle = '#3a3a3a'; ctx.font = 'bold 60px Georgia'; ctx.fillText('Have', px + 28, py + 78); ctx.fillText('fun', px + 40, py + 150);
+    const faces = ['#6b4f2a', '#7a3aa0', '#e0b020', '#3a8a6a'];
+    faces.forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(px + 70 + i * 64, py + 230, 26, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#111'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(px + 70 + i * 64, py + 236, 12, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke(); });
+    ctx.fillStyle = '#111'; ctx.fillRect(px + 56, py + 188, 28, 14); // Har's top hat hint
 
-  // =================== CRT overlays (DOM, shown only on camera view) ===================
-  const scan = document.createElement('div');
-  scan.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:5;display:none;' +
-    'background:repeating-linear-gradient(0deg,rgba(0,0,0,0.0) 0px,rgba(0,0,0,0.0) 2px,rgba(0,0,0,0.28) 3px,rgba(0,0,0,0.0) 4px);' +
-    'mix-blend-mode:multiply;';
-  mountEl.appendChild(scan);
-  const staticEl = document.createElement('div');
-  staticEl.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:6;display:none;opacity:0;' +
-    "background-image:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/></svg>\");";
-  mountEl.appendChild(staticEl);
+    // desk + monitor + blue kettle (foreground center)
+    const dx = sceneW / 2;
+    ctx.fillStyle = '#3a2418'; ctx.beginPath(); ctx.moveTo(dx - 360, H); ctx.lineTo(dx - 300, H * 0.62); ctx.lineTo(dx + 300, H * 0.62); ctx.lineTo(dx + 360, H); ctx.fill();
+    // monitor
+    ctx.fillStyle = '#2c2c30'; ctx.fillRect(dx + 30, H * 0.4, 240, 200);
+    ctx.fillStyle = state.monitorUp ? '#1a4a3a' : '#0a0c0e'; ctx.fillRect(dx + 50, H * 0.43, 200, 150);
+    // blue kettle
+    ctx.fillStyle = '#10489a'; ctx.beginPath(); ctx.ellipse(dx - 120, H * 0.58, 70, 56, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#3aa0ff'; ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(dx - 120, H * 0.5, 46, Math.PI, 2 * Math.PI); ctx.stroke();
 
-  // =================== state ===================
-  let activeCam = officeCam;
-  let monitorUp = false;
-  let staticTimer = 0;
-  let shakeAmt = 0;
-  let jumpscaring = false;
-  let powerLevel = 1;
+    // ---- doors (left & right edges) ----
+    drawDoor(0, 'L', state, scroll, sceneW);
+    drawDoor(sceneW - 220, 'R', state, scroll, sceneW);
 
-  window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    const aspect = window.innerWidth / window.innerHeight;
-    officeCam.aspect = aspect; officeCam.updateProjectionMatrix();
-    for (const c of Object.values(roomCams)) { c.aspect = aspect; c.updateProjectionMatrix(); }
-  });
+    ctx.restore();
+  }
 
-  function placeHarAt(roomId) {
-    har.group.visible = true;
-    if (roomId === 'OFFICE') {
-      // looming in the office doorway/desk area (used when he reaches you)
-      har.group.position.set(0, 0, 2.0);
-      har.group.rotation.y = 0;
-    } else if (roomAnchors[roomId]) {
-      har.group.position.copy(roomAnchors[roomId]);
-      har.group.rotation.y = Math.PI; // face the room camera
+  function drawDoor(x, side, state, scroll, sceneW) {
+    const closed = state.doors[side];
+    const lit = state.lights[side];
+    const w = 220, top = H * 0.12, hgt = H * 0.74;
+    // frame
+    ctx.fillStyle = '#2a2520'; ctx.fillRect(x, top - 18, w, hgt + 18);
+    // hallway opening (dark, or lit when light on)
+    ctx.fillStyle = lit ? '#5a5642' : '#0c0d11'; ctx.fillRect(x + 20, top, w - 40, hgt);
+    // a creature lurking when the light reveals it (Har uses the LEFT door)
+    const har = state.animatronics && state.animatronics.har;
+    const atThisDoor = side === 'L' && har && (har.room === 'CAM3' || har.room === 'OFFICE');
+    if (lit && atThisDoor) drawOwl(x + w / 2, top + hgt * 0.34, 0.95, 1.3);
+    // door light button + door button
+    ctx.fillStyle = lit ? '#e8b23a' : '#2b2b33'; ctx.fillRect(x + w + 8, top + 120, 30, 34);
+    ctx.fillStyle = closed ? '#e24b4a' : '#2b2b33'; ctx.fillRect(x + w + 8, top + 80, 30, 34);
+    ctx.fillStyle = '#cfcabb'; ctx.font = '16px Georgia'; ctx.fillText('L', x + w + 16, top + 143); ctx.fillText('D', x + w + 16, top + 103);
+    // sliding metal door (animated)
+    const a = doorAnimGet(side, closed);
+    if (a > 0.01) {
+      ctx.fillStyle = '#3a3f47'; ctx.fillRect(x + 20, top, w - 40, hgt * a);
+      ctx.strokeStyle = '#23262b'; ctx.lineWidth = 4;
+      for (let yy = top + 24; yy < top + hgt * a; yy += 26) { ctx.beginPath(); ctx.moveTo(x + 20, yy); ctx.lineTo(x + w - 20, yy); ctx.stroke(); }
     }
+  }
+  const doorAnim = { L: 0, R: 0 };
+  function doorAnimGet(side, closed) {
+    const tgt = closed ? 1 : 0; doorAnim[side] += (tgt - doorAnim[side]) * 0.4; return doorAnim[side];
+  }
+
+  // ---------- camera rooms (flat) ----------
+  const ROOMS = {
+    CAM1A: { name: 'CAM 1A — SHOW STAGE', bg: '#0d1a14', accent: '#2a5a3a' },
+    CAM1B: { name: 'CAM 1B — DINING', bg: '#0d141a', accent: '#2a3a5a' },
+    CAM3:  { name: 'CAM 3 — CLOSET', bg: '#12121a', accent: '#3a3a5a' },
+    CAM7:  { name: 'CAM 7 — COVE', bg: '#1a140d', accent: '#6a3a10' },
+  };
+  function drawCamera(state) {
+    const id = state.activeCam; const room = ROOMS[id] || ROOMS.CAM1A;
+    ctx.fillStyle = room.bg; ctx.fillRect(0, 0, W, H);
+    // floor + back wall hint
+    ctx.fillStyle = room.accent; ctx.globalAlpha = 0.5; ctx.fillRect(0, H * 0.7, W, H * 0.3); ctx.globalAlpha = 1;
+    // a defining prop per room
+    if (id === 'CAM1A') { ctx.fillStyle = '#5a1020'; ctx.fillRect(W * 0.2, H * 0.1, W * 0.6, H * 0.6); } // stage curtain
+    if (id === 'CAM7') { ctx.fillStyle = '#6a2a10'; ctx.fillRect(W * 0.25, H * 0.1, W * 0.5, H * 0.7); }   // cove curtain
+    if (id === 'CAM1B') { for (let i = 0; i < 3; i++) { ctx.fillStyle = '#2a2a30'; ctx.beginPath(); ctx.ellipse(W * (0.3 + i * 0.2), H * 0.6, 70, 28, 0, 0, 7); ctx.fill(); } }
+    if (id === 'CAM3') { ctx.fillStyle = '#2a2a30'; ctx.fillRect(W * 0.35, H * 0.3, W * 0.3, H * 0.45); }
+    // Har if he's in this room
+    if (harRoom === id) drawOwl(W / 2, H * 0.42, Math.min(W, H) / 360, 1.2);
+    // greenish night-vision tint + scanlines
+    ctx.fillStyle = 'rgba(40,90,60,0.10)'; ctx.fillRect(0, 0, W, H);
+    drawScanlines();
+  }
+
+  function drawScanlines() {
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 2);
+  }
+
+  function drawStatic(alpha) {
+    regenNoise(); ctx.globalAlpha = alpha; ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(noise, 0, 0, W, H); ctx.imageSmoothingEnabled = true; ctx.globalAlpha = 1;
+  }
+
+  // ---------- public facade ----------
+  function render(state, dt) {
+    if (!state) return;
+    panX += (panTarget - panX) * Math.min(1, dt * 5);
+
+    let ox = 0, oy = 0;
+    if (shakeAmt > 0.002) { ox = (Math.random() - 0.5) * shakeAmt * 60; oy = (Math.random() - 0.5) * shakeAmt * 60; shakeAmt *= 0.86; }
+    ctx.save(); ctx.translate(ox, oy);
+
+    const monitorUp = !jumpResolve && !!state.monitorUp;
+    if (monitorUp) drawCamera(state);
+    else drawOffice(state);
+
+    // power dimming (office only; cameras have their own light)
+    if (!monitorUp) {
+      const flOn = state.flashlight && state.flashlight.on;
+      let darkness = (1 - dim) * 0.8 + 0.12;
+      if (flOn) darkness = Math.max(0, darkness - 0.45);
+      ctx.fillStyle = `rgba(2,3,6,${darkness})`; ctx.fillRect(-ox, -oy, W, H);
+      if (flOn) { // flashlight wash toward where you're looking
+        const cx = W * (0.5 + (panX - 0.5) * 0.6), g = ctx.createRadialGradient(cx, H * 0.5, 40, cx, H * 0.5, H * 0.7);
+        g.addColorStop(0, 'rgba(255,250,230,0.22)'); g.addColorStop(1, 'rgba(255,250,230,0)');
+        ctx.fillStyle = g; ctx.fillRect(-ox, -oy, W, H);
+      }
+    }
+
+    // static burst
+    if (staticTimer > 0) { staticTimer -= dt; drawStatic(Math.min(0.8, staticTimer * 2.2)); }
+
+    // jumpscare overlay
+    if (jumpResolve) {
+      jumpT += dt;
+      ctx.fillStyle = '#000'; ctx.fillRect(-ox, -oy, W, H);
+      const s = Math.min(W, H) / 220 * (1 + jumpT * 0.5);
+      drawOwl(W / 2 + (Math.random() - 0.5) * 30, H * 0.52 + (Math.random() - 0.5) * 30, s, 1.6);
+      if (Math.sin(jumpT * 40) > 0) { ctx.fillStyle = 'rgba(120,0,0,0.25)'; ctx.fillRect(-ox, -oy, W, H); }
+      if (jumpT > 1.1) { const r = jumpResolve; jumpResolve = null; jumpT = 0; r(); }
+    }
+
+    // vignette
+    const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.8);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    ctx.fillStyle = vg; ctx.fillRect(-ox, -oy, W, H);
+
+    ctx.restore();
   }
 
   return {
-    render(state, dt) {
-      // fan + eye shimmer
-      fan.rotation.y += dt * 3.0;
-      const flick = 0.9 + Math.sin(performance.now() * 0.02) * 0.1;
-      har.eyes.forEach(e => { e.material.emissiveIntensity = 1.2 * flick; });
-
-      // resolve which camera renders this frame (a jumpscare forces the office view)
-      monitorUp = !jumpscaring && !!(state && state.monitorUp);
-      if (monitorUp && state.activeCam && roomCams[state.activeCam]) activeCam = roomCams[state.activeCam];
-      else activeCam = officeCam;
-
-      // office pan (smoothed) + constant idle sway so the 3D depth is always obvious
-      panYaw += (panTarget - panYaw) * Math.min(1, dt * 6);
-      if (!monitorUp && !jumpscaring) {
-        const t = performance.now() * 0.001;
-        officeCam.position.x = Math.sin(t * 0.45) * 0.12;          // gentle drift
-        officeCam.position.y = 1.8 + Math.sin(t * 0.62) * 0.04;    // breathing bob
-        officeCam.position.z = 6.6 + Math.sin(t * 0.3) * 0.06;
-        officeCam.rotation.y = panYaw + Math.sin(t * 0.33) * 0.05; // sway + mouse look
-        officeCam.rotation.x = -0.04 + Math.sin(t * 0.5) * 0.012;
-      } else {
-        officeCam.rotation.y = 0;
-        officeCam.position.set(0, 1.8, 6.6);
-      }
-
-      // flashlight rides the active camera
-      if (flashlight.visible) {
-        flashlight.position.copy(activeCam.getWorldPosition(new THREE.Vector3()));
-        const dir = new THREE.Vector3(); activeCam.getWorldDirection(dir);
-        flashlight.target.position.copy(flashlight.position.clone().add(dir.multiplyScalar(12)));
-      }
-
-      // screen shake — apply a temporary offset, then restore so it never drifts
-      let ox = 0, oy = 0;
-      if (shakeAmt > 0.001) {
-        ox = (Math.random() - 0.5) * shakeAmt * 0.4;
-        oy = (Math.random() - 0.5) * shakeAmt * 0.4;
-        activeCam.position.x += ox; activeCam.position.y += oy;
-        shakeAmt *= 0.88;
-      }
-
-      // CRT scanlines only on camera view
-      scan.style.display = monitorUp ? 'block' : 'none';
-      // static burst decay
-      if (staticTimer > 0) { staticTimer -= dt; staticEl.style.display = 'block'; staticEl.style.opacity = String(Math.min(0.85, staticTimer * 2)); staticEl.style.backgroundPosition = `${Math.random() * 100}px ${Math.random() * 100}px`; }
-      else { staticEl.style.display = 'none'; }
-
-      renderer.render(scene, activeCam);
-      activeCam.position.x -= ox; activeCam.position.y -= oy; // undo shake offset
-    },
-    setOfficeView() { monitorUp = false; },
-    setCamView(camId) { if (roomCams[camId]) { /* selection mirrored from state in render */ } },
-    setAnimatronicRoom(name, roomId) { if (name === 'har') placeHarAt(roomId); },
-    setDoor(side, closed) {
-      const d = side.toLowerCase()[0] === 'l' ? doorL : doorR;
-      d.panel.position.y = closed ? 1.6 : 4.6; // down=closed, up=open
-    },
-    setLight(side, on) {
-      const d = side.toLowerCase()[0] === 'l' ? doorL : doorR;
-      d.light.intensity = on ? 2.2 : 0;
-    },
-    setFlashlight(on) { flashlight.visible = on; flashlight.intensity = on ? 3.2 : 0; },
+    render,
+    setOfficeView() { /* view derives from state.monitorUp in render */ },
+    setCamView(camId) { /* derives from state.activeCam */ },
+    setAnimatronicRoom(name, roomId) { if (name === 'har') harRoom = roomId; },
+    setDoor() { /* animated from state in render */ },
+    setLight() { /* read from state in render */ },
+    setFlashlight() { /* read from state in render */ },
     staticBurst() { staticTimer = 0.4; },
     shake(intensity) { shakeAmt = Math.max(shakeAmt, intensity); },
-    playJumpscare(name) {
-      jumpscaring = true;
-      monitorUp = false;
-      // slam Har huge, right in the office camera's face, hard cut
-      har.group.visible = true;
-      har.group.position.set(0, -0.4, 4.4);
-      har.group.rotation.y = 0;
-      har.group.scale.set(2.6, 2.6, 2.6);
-      officeMain.intensity = 4.0; ambient.intensity = 1.2;
-      shakeAmt = 1.4;
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          har.group.scale.set(1.1, 1.1, 1.1);
-          officeMain.intensity = 1.5; ambient.intensity = 0.55;
-          jumpscaring = false;
-          resolve();
-        }, 1100);
-      });
-    },
-    dimForPower(level) {
-      powerLevel = level;
-      // keep a visible floor of light until truly 0 (power-out goes dark)
-      officeMain.intensity = jumpscaring ? officeMain.intensity : 0.25 + 1.4 * level;
-      officeFill.intensity = 0.15 + 0.45 * level;
-    },
+    playJumpscare() { return new Promise((resolve) => { jumpT = 0; jumpResolve = resolve; shakeAmt = 1.2; }); },
+    dimForPower(level) { dim = level; },
   };
 }
