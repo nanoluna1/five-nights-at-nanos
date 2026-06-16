@@ -85,13 +85,23 @@ test('shutting the door sends a walker back to the START of its path (no door ca
   assert.equal(gi.room, 'CAM1A');     // gi.start
 });
 
-test('watching the cove eases Arg back gently and never snaps him to stage 0', () => {
+test('watching the cove HOLDS Arg at his current stage (never recedes)', () => {
   const s = createGameState(3);
   isolate(s, 'arg');
   const arg = s.animatronics.arg; arg.emergence = 60; // mid-emergence (stage 3)
   s.monitorUp = true; s.activeCam = 'CAM7';            // watch him
-  for (let i = 0; i < 20; i++) stepAI(s, 0.1, makeRng(1)); // 2s of watching
-  assert.ok(arg.emergence > 45 && arg.emergence < 60, 'eased down a little, not reset to 0');
+  for (let i = 0; i < 30; i++) stepAI(s, 0.1, makeRng(1)); // 3s of watching
+  assert.equal(arg.emergence, 60, 'frozen at his stage while watched — does not go backward');
+});
+
+test('once Arg leaves the cove he is seen sprinting down the right hall (CAM4)', () => {
+  const s = createGameState(5);
+  isolate(s, 'arg');
+  s.monitorUp = false; // cove unwatched -> he fills and commits
+  const arg = s.animatronics.arg;
+  let sawHall = false;
+  for (let i = 0; i < 300 && !arg.atDoor; i++) { stepAI(s, 0.5, makeRng(1)); if (arg.committed && arg.room === 'CAM4') sawHall = true; }
+  assert.ok(sawHall, 'while committed he should appear in CAM4 before reaching the door');
 });
 
 test('low power boosts har enough to advance at base difficulty 0', () => {

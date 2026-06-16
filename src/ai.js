@@ -36,12 +36,16 @@ function stepArg(state, a, c, seconds) {
   }
   const watched = state.monitorUp && state.activeCam === c.start; // c.start === 'CAM7'
   if (watched) {
-    a.emergence = Math.max(0, a.emergence - CONFIG.ai.argEmergenceRecoverPerSec * seconds);
+    // Looking at the cove HOLDS him at his current stage (deters further emergence). He never
+    // recedes while you watch — the cam just shows whatever stage he's already at. He only
+    // advances while the cove is unwatched.
   } else {
     const fill = CONFIG.ai.argEmergenceFillBasePerSec * (0.5 + a.difficulty / 20);
     a.emergence = Math.min(100, a.emergence + fill * seconds);
   }
-  if (a.emergence >= 100) { a.committed = true; a.transit = 0; } // leaves the cove → stage 4
+  // At 100 he leaves the cove (stage 4: empty + "out of order") and is seen SPRINTING down his
+  // side's hall toward the office until he reaches the door.
+  if (a.emergence >= 100) { a.committed = true; a.transit = 0; a.room = c.side === 'L' ? 'CAM2' : 'CAM4'; }
 }
 
 // Advance all AI by `seconds`. rng() -> [0,1). Walking creatures roll to advance one room

@@ -3,9 +3,10 @@ export const CONFIG = {
     nightSeconds: 360,        // 6 real minutes/night = 60s per in-game hour; genre-standard pacing
   },
   power: {
-    drainBasePerSec: 0.05,    // idle drain: doing nothing barely loses (you can coast on near-zero usage)
-    drainPerUnitPerSec: 0.18, // each active door/light/cam. Tuned DOWN (was 0.25 base / 0.30 unit) so a
-                              // single active bar comfortably lasts the full night; stacking 3-4 still burns out.
+    drainBasePerSec: 0.10,    // idle drain: doing nothing STILL visibly bleeds power (~6%/min), so you
+                              // can't just sit there — but on its own it won't kill you over a night.
+    drainPerUnitPerSec: 0.15, // each active door/light/cam. A single active bar still lasts the night
+                              // (~10% to spare); two or more burn out before 6 AM.
   },
   flashlight: {
     drainPerSec: 4.0,         // separate budget from main power; punishes holding the beam on
@@ -40,12 +41,10 @@ export const CONFIG = {
     // Arg's cove "emergence" meter (0-100): fills while CAM7 is NOT being watched, drains
     // while you watch it. At 100 he sprints the right hall. Fill scales with difficulty so
     // later nights punish camera neglect harder. This is why watching the cove matters.
-    // Tuned DOWN (was 4.0 fill / 14 recover) — he was emerging far too often.
+    // Tuned DOWN (was 4.0) — he was emerging far too often. Watching the cove HOLDS him at his
+    // current stage (no recover constant any more): he never recedes while watched, only freezes;
+    // he advances only while the cove is unwatched. See stepArg in ai.js.
     argEmergenceFillBasePerSec: 2.2,
-    // Watching the cove now only EASES him back gently (was 18 = a near-instant reset to stage 0,
-    // which the player hated). He never snaps backward; you just deter further emergence and the
-    // cam always shows his real current stage.
-    argEmergenceRecoverPerSec: 3.0,
     argWarnAt: 68,            // emergence % at which his running-footsteps tell plays ("he's coming")
     // Cove emergence visual stages (by emergence %): 1 closed, 2 parted, 3 out-as-figure.
     // At 100 he COMMITS (stage 4: empty cove + "out of order" sign) and, after a delay, sprints.
