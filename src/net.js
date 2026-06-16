@@ -46,6 +46,20 @@ export function createLoopbackClient(code, hooks = {}) {
 
 // ---------------- PeerJS (real P2P) ----------------
 const PEERJS_CDN = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+// STUN for ordinary NAT traversal + free TURN relays as a fallback for strict/symmetric NATs
+// (mobile data, locked-down Wi-Fi) where a direct P2P link can't form and the join would otherwise
+// hang on "Connecting…". ICE picks whichever candidate works and skips dead ones.
+const ICE = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+  ],
+};
+const CONNECT_TIMEOUT_MS = 18000; // give up (with a message) instead of hanging forever
 let peerLibPromise = null;
 function loadPeerJS() {
   if (typeof window !== 'undefined' && window.Peer) return Promise.resolve(window.Peer);
@@ -62,7 +76,7 @@ function loadPeerJS() {
 
 export async function createPeerHost(code, hooks = {}) {
   const Peer = await loadPeerJS();
-  const peer = new Peer(code); // the room code is our peer id
+  const peer = new Peer(code, { config: ICE }); // the room code is our peer id
   const conns = new Map();
   let opened = false, closed = false;
   // The public PeerJS broker drops idle peers after a few minutes — which would make the room code
@@ -96,15 +110,16 @@ export async function createPeerHost(code, hooks = {}) {
 
 export async function createPeerClient(code, hooks = {}) {
   const Peer = await loadPeerJS();
-  const peer = new Peer();
+  const peer = new Peer(undefined, { config: ICE });
   return new Promise((resolve) => {
     let settled = false;
+    const done = (val) => { if (settled) return; settled = true; clearTimeout(to); resolve(val); };
+    const to = setTimeout(() => { try { if (!peer.destroyed) peer.destroy(); } catch (e) {} done(null); }, CONNECT_TIMEOUT_MS);
     peer.on('open', () => {
       const conn = peer.connect(code, { reliable: true });
       conn.on('open', () => {
-        settled = true;
         hooks.onReady && hooks.onReady();
-        resolve({ id: peer.id, send: (m) => conn.send(m), close: () => { try { conn.close(); peer.destroy(); } catch (e) {} } });
+        done({ id: peer.id, send: (m) => conn.send(m), close: () => { try { conn.close(); peer.destroy(); } catch (e) {} } });
       });
       conn.on('data', (msg) => { if (msg && msg.type === '__ping') return; hooks.onMessage && hooks.onMessage(msg); });
       conn.on('close', () => hooks.onClose && hooks.onClose());
@@ -114,7 +129,7 @@ export async function createPeerClient(code, hooks = {}) {
       const t = e && e.type ? e.type : String(e);
       if (settled && (t === 'network' || t === 'disconnected')) { try { if (!peer.destroyed) peer.reconnect(); } catch (e2) {} return; }
       hooks.onError && hooks.onError(t);
-      if (!settled) resolve(null);
+      done(null);
     });
   });
 }
