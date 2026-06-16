@@ -65,14 +65,40 @@ const mp = createMpMenu(app, {
 let spinState = null;        // host-only: { order, remaining, guardAssigned, assigned, turnIdx, rng }
 let mpGame = null;           // active multiplayer match (Slice 3), or null
 let mpAssignments = null;    // role assignments carried from the spin into the match
+let cheatHostGuard = false;  // CHEAT (host only): forces the host's spin to land on Guard
 function myMpId() { return mpNet && mpNet.isHost ? 'HOST' : (mpNet ? mpNet.id : null); }
-function teardownMp() { if (mpNet) { try { mpNet.close(); } catch (e) {} } mpNet = null; mpLobby = null; spinState = null; mpGame = null; mpAssignments = null; animHud.hide(); }
+function teardownMp() { if (mpNet) { try { mpNet.close(); } catch (e) {} } mpNet = null; mpLobby = null; spinState = null; mpGame = null; mpAssignments = null; cheatHostGuard = false; animHud.hide(); }
 
 const animHud = createAnimHud(app, {
   onTeleport: (node) => mpGame && mpGame.teleport(node),
   onKill: () => mpGame && mpGame.kill(),
 });
 function mpGuardActive() { return !!(mpGame && mpGame.isActive() && mpGame.isGuard); }
+
+// ---- CHEAT: host types "1" then "2" (in the lobby / spin, not during a live match) to guarantee
+// they spin Guard. Host-only: gated on mpNet.isHost, and only the host's own spin is forced. ----
+let cheatToastEl = null, cheatToastTimer = null;
+function showCheatToast(text) {
+  if (!cheatToastEl) {
+    cheatToastEl = document.createElement('div');
+    cheatToastEl.style.cssText = "position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:40;background:rgba(20,10,10,0.92);border:1px solid #e8b23a;color:#e8b23a;font-family:Georgia,serif;font-size:15px;letter-spacing:1px;padding:8px 16px;border-radius:6px;pointer-events:none;display:none;";
+    app.appendChild(cheatToastEl);
+  }
+  cheatToastEl.textContent = '🔧 ' + text;
+  cheatToastEl.style.display = 'block';
+  clearTimeout(cheatToastTimer);
+  cheatToastTimer = setTimeout(() => { cheatToastEl.style.display = 'none'; }, 2200);
+}
+let cheatBuf = '';
+window.addEventListener('keydown', (e) => {
+  if (!(mpNet && mpNet.isHost)) return;        // host only
+  if (mpGame && mpGame.isActive()) return;     // not during the live match (1/2 are camera keys there)
+  const k = e.key;
+  if (k >= '0' && k <= '9') {
+    cheatBuf = (cheatBuf + k).slice(-2);
+    if (cheatBuf === '12') { cheatHostGuard = true; cheatBuf = ''; showCheatToast('Cheat armed — you will be the GUARD'); }
+  } else cheatBuf = '';
+});
 
 function hostGame(name) {
   myName = (name || '').trim() || 'Nano';
@@ -162,7 +188,10 @@ function mpDoSpin(byId) {
   const active = spinState.order[spinState.turnIdx];
   if (!active || active.id !== byId) return; // only the player whose turn it is can spin
   const playersLeft = spinState.order.length - spinState.turnIdx;
-  const role = pickSpinRole(spinState.remaining, spinState.guardAssigned, playersLeft, spinState.rng);
+  // CHEAT: force the host onto Guard when armed (host spins first, so guard is still available).
+  const role = (cheatHostGuard && active.id === 'HOST' && spinState.remaining.includes('guard'))
+    ? 'guard'
+    : pickSpinRole(spinState.remaining, spinState.guardAssigned, playersLeft, spinState.rng);
   const durationMs = 3400;
   const res = { type: 'spinResult', activeId: active.id, activeName: active.name, role, durationMs };
   mpNet.broadcast(res);
