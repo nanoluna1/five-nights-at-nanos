@@ -38,6 +38,39 @@ export function createWorld(mountEl) {
     arg: (x, y, s, g) => drawArg(ctx, x, y, s, g),
   };
 
+  // ---- light-check silhouettes ----
+  // When you flick a light, a lurking animatronic shows as a translucent DARK silhouette with
+  // glowing eyes — not the full-colour model. Drawn offscreen, tinted toward shadow, composited
+  // back with a little transparency, then the eyes are re-lit on top so they always glow.
+  const RAW = { har: drawHar, gi: drawGi, cluck: drawCluck, arg: drawArg };
+  const EYES = { har: [[-20, -55], [20, -55]], gi: [[-15, -62], [15, -62]], cluck: [[-16, -60], [16, -60]], arg: [[16, -65]] };
+  const EYECOL = { har: [255, 180, 40], gi: [120, 255, 120], cluck: [255, 230, 120], arg: [255, 40, 40] };
+  const sil = document.createElement('canvas'); const sctx = sil.getContext('2d');
+  function drawSilhouette(name, cx, cy, scale) {
+    const ow = Math.ceil(240 * scale), oh = Math.ceil(340 * scale);
+    if (sil.width < ow) sil.width = ow;
+    if (sil.height < oh) sil.height = oh;
+    sctx.clearRect(0, 0, sil.width, sil.height);
+    RAW[name](sctx, ow / 2, oh / 2, scale, 1.4);             // full model offscreen
+    sctx.save(); sctx.globalCompositeOperation = 'source-atop';
+    sctx.fillStyle = 'rgba(6,8,16,0.72)';                    // crush it to a cold-dark silhouette
+    sctx.fillRect(0, 0, sil.width, sil.height); sctx.restore();
+    ctx.save(); ctx.globalAlpha = 0.82;                      // a little transparency
+    ctx.drawImage(sil, 0, 0, ow, oh, cx - ow / 2, cy - oh / 2, ow, oh);
+    ctx.restore();
+    // re-light the eyes on top so they read as glowing through the shadow
+    const col = EYECOL[name] || [255, 180, 40];
+    for (const [ex, ey] of (EYES[name] || [])) {
+      const gx = cx + ex * scale, gy = cy + ey * scale, r = 15 * scale;
+      const grd = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
+      grd.addColorStop(0, `rgba(${col[0]},${col[1]},${col[2]},0.95)`);
+      grd.addColorStop(0.4, `rgba(${col[0]},${col[1]},${col[2]},0.45)`);
+      grd.addColorStop(1, `rgba(${col[0]},${col[1]},${col[2]},0)`);
+      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(gx, gy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(gx, gy, 2.2 * scale, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
   // ===================== office =====================
   function drawOffice(state) {
     const sceneW = W * 1.7;
@@ -54,27 +87,37 @@ export function createWorld(mountEl) {
     const winX = side === 'L' ? baseX + 240 : baseX;    // window beside it
     const top = H * 0.14, hgt = H * 0.66, wW = 190, wH = hgt * 0.7;
 
-    // window (light-check blind spot) — agy art; creature revealed over the glass when lit
+    // window: a light-check reveals a creature still APPROACHING down this side's hall (near you,
+    // but not yet at the office) — shown only here, as a shadowy silhouette.
     const lit = state.lights[side];
     drawWindow(ctx, winX, top, wW, wH, lit);
-    const lurk = lit_creature(state, side);
-    if (lit && lurk) { ctx.save(); ctx.beginPath(); ctx.rect(winX + 12, top + 12, wW - 24, wH - 24); ctx.clip(); DRAW[lurk](winX + wW / 2, top + wH * 0.62, 0.8, 1.3); ctx.restore(); }
+    const winLurk = lit ? windowCreature(state, side) : null;
+    if (winLurk) {
+      ctx.save(); ctx.beginPath(); ctx.rect(winX + 12, top + 12, wW - 24, wH - 24); ctx.clip();
+      drawSilhouette(winLurk, winX + wW / 2, top + wH * 0.6, 0.62); ctx.restore();
+    }
 
-    // doorway + sliding blast-door — agy art; closedAmt drives the slide (eased from state).
-    // The light also spills down the corridor through the open door (not just the window).
+    // doorway + sliding blast-door — the light spills down the corridor through the open door.
     const closedAmt = (doorAnim[side] += ((state.doors[side] ? 1 : 0) - doorAnim[side]) * 0.4);
     drawDoorway(ctx, doorX, top, 200, hgt, closedAmt, lit);
-    // the light ALSO reveals a creature standing in the doorway (in the part still open
-    // below the descending door) — so a light-check covers both the window and the door.
-    if (lit && lurk && closedAmt < 0.85) {
+    // door: reveals a creature that has REACHED the office (at this door) — shown only here, in
+    // the part still open below the descending blast door, again as a silhouette.
+    const doorLurk = lit ? doorCreature(state, side) : null;
+    if (doorLurk && closedAmt < 0.85) {
       ctx.save(); ctx.beginPath(); ctx.rect(doorX + 20, top + hgt * closedAmt, 160, hgt * (1 - closedAmt)); ctx.clip();
-      DRAW[lurk](doorX + 100, top + hgt * 0.62, 0.9, 1.35); ctx.restore();
+      drawSilhouette(doorLurk, doorX + 100, top + hgt * 0.58, 0.78); ctx.restore();
     }
   }
-  // which creature (if any) is lurking right outside `side`'s door
-  function lit_creature(state, side) {
-    if (!state.animatronics) return null;
-    for (const [name, a] of Object.entries(state.animatronics)) if (a.atDoor === side) return name;
+  // a creature that has reached the office, lurking right outside `side`'s door
+  function doorCreature(state, side) {
+    for (const [name, a] of Object.entries(state.animatronics || {})) if (a.atDoor === side) return name;
+    return null;
+  }
+  // a creature approaching down `side`'s hall (the adjacent cam) — seen through the window before
+  // it reaches the door. CAM2 feeds the left door, CAM4 the right (and Arg's sprint runs CAM4).
+  function windowCreature(state, side) {
+    const hallCam = side === 'L' ? 'CAM2' : 'CAM4';
+    for (const [name, a] of Object.entries(state.animatronics || {})) if (!a.atDoor && a.room === hallCam) return name;
     return null;
   }
 
