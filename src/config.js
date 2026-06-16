@@ -25,13 +25,16 @@ export const CONFIG = {
     // Per-creature topology. `path` is the sequence of camera rooms a creature walks;
     // after its last room it is "at the door" on `side`, where the player must shut that
     // door (or it enters → scare). `doorGraceSec` is how long it lingers at the door before
-    // striking — Gi is the fast aggressor, Arg's cove sprint gives the least time.
+    // striking — the player gets an arrival tell (per-creature SFX in main.js) + the door/window
+    // light reveal as the cue, then this window to react. Gi is the fast aggressor (shortest
+    // window of the walkers); Arg's cove sprint still gives the least time overall.
     // Left side = Har + Gi; right side = Cluck + Arg. CAM2 = left hall, CAM4 = right hall.
+    // Tuned UP (was har 3 / gi 2 / cluck 3 / arg 1.5) — at-door felt like an instakill.
     creatures: {
-      har:   { side: 'L', start: 'CAM1A', path: ['CAM1A', 'CAM1B', 'CAM2'], doorGraceSec: 3.0, lowPowerBoost: true },
-      gi:    { side: 'L', start: 'CAM1A', path: ['CAM1A', 'CAM2'],          doorGraceSec: 2.0 },
-      cluck: { side: 'R', start: 'CAM1B', path: ['CAM1B', 'CAM1A', 'CAM4'], doorGraceSec: 3.0 },
-      arg:   { side: 'R', start: 'CAM7', cove: true,                        doorGraceSec: 1.5 },
+      har:   { side: 'L', start: 'CAM1A', path: ['CAM1A', 'CAM1B', 'CAM2'], doorGraceSec: 5.0, lowPowerBoost: true },
+      gi:    { side: 'L', start: 'CAM1A', path: ['CAM1A', 'CAM2'],          doorGraceSec: 4.0 },
+      cluck: { side: 'R', start: 'CAM1B', path: ['CAM1B', 'CAM1A', 'CAM4'], doorGraceSec: 5.0 },
+      arg:   { side: 'R', start: 'CAM7', cove: true,                        doorGraceSec: 3.0 },
     },
     // Arg's cove "emergence" meter (0-100): fills while CAM7 is NOT being watched, drains
     // while you watch it. At 100 he sprints the right hall. Fill scales with difficulty so
