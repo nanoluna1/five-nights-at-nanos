@@ -74,6 +74,26 @@ test('watching the cove keeps arg from emerging', () => {
   assert.equal(s.pendingScare, null);
 });
 
+test('shutting the door sends a walker back to the START of its path (no door camping)', () => {
+  const s = createGameState(1);
+  isolate(s, 'gi');
+  const gi = s.animatronics.gi; gi.atDoor = 'L'; gi.room = 'DOOR_L'; gi.doorTimer = 0;
+  s.doors.L = true; // shut in time
+  stepAI(s, 0.1, makeRng(1));
+  assert.equal(gi.atDoor, null);
+  assert.equal(gi.pathIndex, 0);      // all the way back to the start, not lingering by the door
+  assert.equal(gi.room, 'CAM1A');     // gi.start
+});
+
+test('watching the cove eases Arg back gently and never snaps him to stage 0', () => {
+  const s = createGameState(3);
+  isolate(s, 'arg');
+  const arg = s.animatronics.arg; arg.emergence = 60; // mid-emergence (stage 3)
+  s.monitorUp = true; s.activeCam = 'CAM7';            // watch him
+  for (let i = 0; i < 20; i++) stepAI(s, 0.1, makeRng(1)); // 2s of watching
+  assert.ok(arg.emergence > 45 && arg.emergence < 60, 'eased down a little, not reset to 0');
+});
+
 test('low power boosts har enough to advance at base difficulty 0', () => {
   const s = createGameState(1);
   isolate(s, 'har');

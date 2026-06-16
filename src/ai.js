@@ -15,7 +15,10 @@ function resolveAtDoor(state, name, c, seconds) {
   if (state.doors[c.side]) {                 // shut in time -> retreat
     a.atDoor = null; a.doorTimer = 0;
     if (c.cove) { a.emergence = 0; a.committed = false; a.transit = 0; a.room = c.start; a.pathIndex = 0; }
-    else { a.pathIndex = c.path.length - 1; a.room = c.path[a.pathIndex]; }
+    // Walkers retreat ALL the way back to the start of their path (was: back to the last hall
+    // room, where they'd re-appear at the door on the next roll and camp there draining power).
+    // Now closing the door buys real breathing room — they have to walk the whole route again.
+    else { a.pathIndex = 0; a.room = c.start; a.moveTimer = 0; }
     return;
   }
   if (a.doorTimer >= c.doorGraceSec) state.pendingScare = name; // lingered with door open

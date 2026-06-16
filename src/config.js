@@ -3,8 +3,9 @@ export const CONFIG = {
     nightSeconds: 360,        // 6 real minutes/night = 60s per in-game hour; genre-standard pacing
   },
   power: {
-    drainBasePerSec: 0.25,    // idle drain: doing nothing still slowly loses, forcing eventual action
-    drainPerUnitPerSec: 0.30, // each active door/light/cam; ~4 simultaneous drains ≈ classic burn rate
+    drainBasePerSec: 0.05,    // idle drain: doing nothing barely loses (you can coast on near-zero usage)
+    drainPerUnitPerSec: 0.18, // each active door/light/cam. Tuned DOWN (was 0.25 base / 0.30 unit) so a
+                              // single active bar comfortably lasts the full night; stacking 3-4 still burns out.
   },
   flashlight: {
     drainPerSec: 4.0,         // separate budget from main power; punishes holding the beam on
@@ -13,11 +14,11 @@ export const CONFIG = {
     tickHz: 10,               // logic ticks/sec; AI move-rolls happen on this cadence
     moveRollEverySec: 5,      // a creature attempts to advance every 5s (rolls vs difficulty)
     difficulty: {             // per-night, 0-20 (chance gate on each move roll = d/20)
-      1: { har: 0,  gi: 2,  cluck: 0, arg: 2 },
-      2: { har: 2,  gi: 4,  cluck: 3, arg: 4 },
-      3: { har: 4,  gi: 6,  cluck: 8, arg: 6 },   // Cluck mid-night spike
-      4: { har: 8,  gi: 9,  cluck: 9, arg: 9 },
-      5: { har: 14, gi: 12, cluck: 12, arg: 12 }, // relentless
+      1: { har: 0,  gi: 2,  cluck: 2,  arg: 2 },   // Cluck now actually participates (was 0 = never moved)
+      2: { har: 2,  gi: 4,  cluck: 5,  arg: 4 },
+      3: { har: 4,  gi: 6,  cluck: 9,  arg: 6 },   // Cluck mid-week spike
+      4: { har: 8,  gi: 9,  cluck: 11, arg: 9 },
+      5: { har: 14, gi: 12, cluck: 14, arg: 12 },  // relentless
     },
     harLowPowerBoost: 6,      // added to Har's effective difficulty while power < lowPowerThreshold
     harLowPowerThreshold: 30, // % power below which Har gets more aggressive (punishes low power)
@@ -41,7 +42,10 @@ export const CONFIG = {
     // later nights punish camera neglect harder. This is why watching the cove matters.
     // Tuned DOWN (was 4.0 fill / 14 recover) — he was emerging far too often.
     argEmergenceFillBasePerSec: 2.2,
-    argEmergenceRecoverPerSec: 18.0,
+    // Watching the cove now only EASES him back gently (was 18 = a near-instant reset to stage 0,
+    // which the player hated). He never snaps backward; you just deter further emergence and the
+    // cam always shows his real current stage.
+    argEmergenceRecoverPerSec: 3.0,
     argWarnAt: 68,            // emergence % at which his running-footsteps tell plays ("he's coming")
     // Cove emergence visual stages (by emergence %): 1 closed, 2 parted, 3 out-as-figure.
     // At 100 he COMMITS (stage 4: empty cove + "out of order" sign) and, after a delay, sprints.
@@ -59,13 +63,13 @@ export const CONFIG = {
     raiseZone: 0.86,  // raise when mouse Y / height > this (bottom ~14% of screen)
     lowerZone: 0.70,  // lower when mouse Y / height < this; gap to raiseZone = no-flicker band
   },
-  // Power-out sequence beats (ms): everything dies → silence → music box → face flickers in
-  // the dark → final scare. Longer than a blink so the dread can build.
+  // Power-out sequence beats (ms): everything dies → a tinny music-box march plays in the dark
+  // (Har's eyes glowing/pulsing on the LEFT door) → the march fades → dead silence → the strike.
+  // The jumpscare fires the instant the silence ends, in lockstep with its sound.
   powerout: {
-    dieMs: 700,        // doors/lights cut, screen falls dark
-    silenceMs: 1800,   // held silence before the music box
-    musicBoxMs: 6500,  // slow original music-box cue
-    faceFlickerMs: 2600, // Har's face stutters into view in the dark
+    dieMs: 600,        // doors/lights cut, screen falls dark
+    songMs: 4500,      // music-box march in the dark (Toreador-style), fading out at the end
+    quietMs: 4000,     // dead silence after the march before Har strikes (eyes still pulsing)
   },
   audio: {
     lowPowerWarnAt: 25,       // % power that triggers the warning sting + UI flicker
