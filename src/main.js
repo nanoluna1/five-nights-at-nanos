@@ -195,7 +195,7 @@ function beginMatch(night, assignments) {
   mp.hide();
   overlay.hideAllScreens(); // hide the menu/HUD so the game canvas shows (guard re-shows its HUD)
   mpGame = createMpGame({
-    world, overlay, animHud, net: mpNet,
+    world, overlay, animHud, audio, net: mpNet,
     isHost: !!(mpNet && mpNet.isHost), myId: myMpId(),
     assignments, night, onEnd: endMatch,
   });
