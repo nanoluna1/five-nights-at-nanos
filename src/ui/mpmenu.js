@@ -119,6 +119,14 @@ export function createMpMenu(rootEl, hooks = {}) {
   reveal.appendChild(revealNote);
   root.appendChild(reveal);
 
+  // ===== MATCH OVER =====
+  const over = el('div', 'position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;');
+  const overTitle = el('div', 'font-size:60px;font-weight:bold;letter-spacing:2px;text-align:center;', '');
+  const overSub = el('div', 'font-size:24px;margin-top:12px;color:#cfcabb;', '');
+  over.appendChild(overTitle); over.appendChild(overSub);
+  over.appendChild(el('div', 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);font-size:14px;color:#6a6a72;', 'returning to the menu…'));
+  root.appendChild(over);
+
   function showScreen(which) {
     root.style.display = 'block';
     home.style.display = which === 'home' ? 'flex' : 'none';
@@ -126,6 +134,7 @@ export function createMpMenu(rootEl, hooks = {}) {
     join.style.display = which === 'join' ? 'flex' : 'none';
     spin.style.display = which === 'spin' ? 'block' : 'none';
     reveal.style.display = which === 'reveal' ? 'flex' : 'none';
+    over.style.display = which === 'over' ? 'flex' : 'none';
   }
   function renderAssigned(list) {
     assignedList.innerHTML = '';
@@ -185,6 +194,14 @@ export function createMpMenu(rootEl, hooks = {}) {
     setStatus(text) { statusEl.textContent = text || ''; },
     setJoinStatus(text) { joinStatus.textContent = text || ''; },
     nameValue() { return nameInput.value; },
+    showMatchOver(winner, myRole, killerName) {
+      showScreen('over');
+      const guardWon = winner === 'guard';
+      overTitle.textContent = guardWon ? '6 AM — THE GUARD SURVIVES' : 'THE ANIMATRONICS WIN';
+      overTitle.style.color = guardWon ? '#bfe0cf' : '#e24b4a';
+      const iWon = (myRole === 'guard') === guardWon;
+      overSub.textContent = (iWon ? 'You win!' : 'You lose.') + (killerName && !guardWon ? '   (' + killerName + ' got in)' : '');
+    },
     hide() { root.style.display = 'none'; },
   };
 }

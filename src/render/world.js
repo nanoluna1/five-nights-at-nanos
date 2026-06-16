@@ -5,6 +5,7 @@ import { drawHar, drawGi, drawCluck, drawArg } from './creatures.js'; // polishe
 import { drawOfficeBackdrop, drawDoorway, drawWindow, drawRoom, drawJumpscareBg } from './scene.js'; // scene art via Google Antigravity CLI
 import { drawCove } from './cove.js';        // Arg's staged Pirate Cove (CAM7)
 import { CONFIG } from '../config.js';        // for Arg cove-stage thresholds
+import { NODES } from '../mpsim.js';          // teleport-node labels for the animatronic POV
 
 export function createWorld(mountEl) {
   const canvas = document.createElement('canvas');
@@ -216,8 +217,54 @@ export function createWorld(mountEl) {
     ctx.restore();
   }
 
+  // ===================== animatronic POV (multiplayer) =====================
+  // What a human-controlled animatronic sees: the camera feed of the node they're standing at, or
+  // the office-door approach when they've teleported to a door (with the kill countdown).
+  function renderAnimView(snap, myName, dt) {
+    fanAngle += dt * 2.2;
+    const a = (snap.anims && snap.anims[myName]) || { node: 'CAM1A' };
+    const node = a.node;
+    const side = node === 'DOOR_L' ? 'L' : node === 'DOOR_R' ? 'R' : null;
+    ctx.save();
+    if (side) {
+      ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, W, H);
+      const closed = !!(snap.doors && snap.doors[side]);
+      const dw = W * 0.34, dh = H * 0.62, dx = W / 2 - dw / 2, dy = H * 0.16;
+      ctx.fillStyle = '#141414'; ctx.fillRect(dx - 30, dy - 30, dw + 60, dh + 30);
+      if (closed) {
+        ctx.fillStyle = '#2c2c2c'; ctx.fillRect(dx, dy, dw, dh);
+        for (let i = 0; i < dh; i += 26) { ctx.fillStyle = '#1e1e1e'; ctx.fillRect(dx, dy + i, dw, 6); }
+        ctx.fillStyle = '#bbaa00'; ctx.fillRect(dx, dy + dh - 16, dw, 16);
+      } else {
+        const g = ctx.createLinearGradient(dx, dy, dx, dy + dh); g.addColorStop(0, '#1a160f'); g.addColorStop(1, '#080808');
+        ctx.fillStyle = g; ctx.fillRect(dx, dy, dw, dh);
+        const rg = ctx.createRadialGradient(W / 2, dy + dh * 0.62, 10, W / 2, dy + dh * 0.62, dw * 0.9);
+        rg.addColorStop(0, 'rgba(255,200,120,0.20)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = rg; ctx.fillRect(dx, dy, dw, dh);
+      }
+      if (a.killTimer > 0) {
+        ctx.fillStyle = 'rgba(180,0,0,' + (0.12 + 0.14 * Math.abs(Math.sin(performance.now() / 90))) + ')'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#ff5a5a'; ctx.font = 'bold 64px Georgia, serif'; ctx.textAlign = 'center';
+        ctx.fillText(String(Math.ceil(a.killTimer)), W / 2, H * 0.52); ctx.textAlign = 'left';
+      } else if (closed) {
+        ctx.fillStyle = '#8a8a90'; ctx.font = '18px monospace'; ctx.textAlign = 'center';
+        ctx.fillText('DOOR SEALED', W / 2, dy + dh + 42); ctx.textAlign = 'left';
+      }
+    } else {
+      drawRoom(ctx, W, H, node, performance.now() / 1000);
+      for (const nm in (snap.anims || {})) {
+        const an = snap.anims[nm];
+        if (nm !== myName && an.node === node && an.node.indexOf('DOOR') !== 0 && DRAW[nm]) DRAW[nm](W / 2 + hashShift(nm), H * 0.5, Math.min(W, H) / 340, 1.2);
+      }
+    }
+    drawScanlines();
+    const label = (NODES.find(n => n.id === node) || {}).label || node;
+    ctx.fillStyle = '#d88'; ctx.font = '16px monospace'; ctx.fillText('YOU  ·  ' + label, 30, H - 40);
+    ctx.restore();
+  }
+
   return {
-    render,
+    render, renderAnimView,
     setOfficeView() {}, setCamView() {}, setAnimatronicRoom() {}, // view + positions derive from state
     setDoor() {}, setLight() {}, setFlashlight() {},
     staticBurst() { staticTimer = 0.4; },

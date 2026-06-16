@@ -195,6 +195,7 @@ export function createOverlay(rootEl, handlers) {
       requestAnimationFrame(() => { card.style.opacity = '1'; });
       setTimeout(() => { card.style.opacity = '0'; }, 2200);
     },
+    hideAllScreens() { hideAll(); },   // used by multiplayer so the canvas (anim POV) shows through
     showPlaying() { hideAll(); hud.style.display = 'block'; },
     showGameOver() { hideAll(); over.style.display = 'flex'; },
     showWin() { hideAll(); win.style.display = 'flex'; },

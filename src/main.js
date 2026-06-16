@@ -11,8 +11,10 @@ import { createAudio } from './audio.js';
 import { createWorld } from './render/world.js';
 import { createOverlay } from './ui/overlay.js';
 import { createMpMenu } from './ui/mpmenu.js';
+import { createAnimHud } from './ui/animhud.js';
 import { makeRoomCode, createLobby, ROLES, pickSpinRole } from './lobby.js';
 import { createPeerHost, createPeerClient } from './net.js';
+import { createMpGame } from './mpgame.js';
 
 const app = document.getElementById('app');
 const audio = createAudio();
@@ -60,9 +62,17 @@ const mp = createMpMenu(app, {
   onSpinPressed: () => onSpinPressed(),
 });
 
-let spinState = null; // host-only: { order, remaining, guardAssigned, assigned, turnIdx, rng }
+let spinState = null;        // host-only: { order, remaining, guardAssigned, assigned, turnIdx, rng }
+let mpGame = null;           // active multiplayer match (Slice 3), or null
+let mpAssignments = null;    // role assignments carried from the spin into the match
 function myMpId() { return mpNet && mpNet.isHost ? 'HOST' : (mpNet ? mpNet.id : null); }
-function teardownMp() { if (mpNet) { try { mpNet.close(); } catch (e) {} } mpNet = null; mpLobby = null; spinState = null; }
+function teardownMp() { if (mpNet) { try { mpNet.close(); } catch (e) {} } mpNet = null; mpLobby = null; spinState = null; mpGame = null; mpAssignments = null; animHud.hide(); }
+
+const animHud = createAnimHud(app, {
+  onTeleport: (node) => mpGame && mpGame.teleport(node),
+  onKill: () => mpGame && mpGame.kill(),
+});
+function mpGuardActive() { return !!(mpGame && mpGame.isActive() && mpGame.isGuard); }
 
 function hostGame(name) {
   myName = (name || '').trim() || 'Nano';
@@ -83,6 +93,8 @@ function hostGame(name) {
         mp.setRoster(mpLobby.players(), { isHost: true });
       } else if (msg.type === 'spinPressed') {
         mpDoSpin(id); // the host validates it's actually this client's turn
+      } else if (msg.type === 'input' && mpGame) {
+        mpGame.onMessage(id, msg); // a player's match input (guard toggle / teleport / kill)
       }
     },
     onLeave: (id) => {
@@ -106,6 +118,8 @@ function joinGame(code) {
       } else if (msg.type === 'turn') mpHandleTurn(msg);
       else if (msg.type === 'spinResult') mpHandleSpinResult(msg);
       else if (msg.type === 'rolesDone') mpHandleRolesDone(msg);
+      else if (msg.type === 'startNight') beginMatch(msg.night, msg.assignments);
+      else if ((msg.type === 'snap' || msg.type === 'matchOver') && mpGame) mpGame.onMessage('HOST', msg);
     },
     onClose: () => mp.setStatus('Host disconnected'),
     onError: (e) => mp.setJoinStatus('Could not connect (' + e + ')'),
@@ -162,10 +176,35 @@ function mpDoSpin(byId) {
 }
 
 function mpFinishRoles() {
-  const msg = { type: 'rolesDone', assignments: spinState ? spinState.assigned.slice() : [] };
-  mpNet.broadcast(msg);
-  mpHandleRolesDone(msg);
+  const assignments = spinState ? spinState.assigned.slice() : [];
+  mpNet.broadcast({ type: 'rolesDone', assignments });
+  mpHandleRolesDone({ assignments });
   spinState = null;
+  // after the reveal, the host kicks off the live night for everyone
+  const night = 1;
+  setTimeout(() => {
+    if (!mpNet || !mpNet.isHost) return;
+    mpNet.broadcast({ type: 'startNight', night, assignments });
+    beginMatch(night, assignments);
+  }, 4200);
+}
+
+// ---- Slice 3: the live night ----
+function beginMatch(night, assignments) {
+  mpAssignments = assignments;
+  mp.hide();
+  overlay.hideAllScreens(); // hide the menu/HUD so the game canvas shows (guard re-shows its HUD)
+  mpGame = createMpGame({
+    world, overlay, animHud, net: mpNet,
+    isHost: !!(mpNet && mpNet.isHost), myId: myMpId(),
+    assignments, night, onEnd: endMatch,
+  });
+  mpGame.start();
+}
+
+function endMatch(snap, myRole) {
+  mp.showMatchOver(snap.winner, myRole, snap.killerName); // covers the game (z-index above the HUD)
+  setTimeout(() => { teardownMp(); mp.hide(); overlay.showMenu(loadSave(store)); }, 5500);
 }
 
 function onSpinPressed() {
@@ -232,12 +271,16 @@ function raiseCams() { if (state.monitorUp || !camArmed) return; if (setMonitor(
 function lowerCams() { if (!state.monitorUp) return; if (setMonitor(state, false)) { audio.oneShot('monitorWhir'); world.setOfficeView(); state.flashlight.on = false; } } // flashlight is a camera tool; off when we drop
 
 overlay.onToggleMonitor = () => {
+  if (mpGuardActive()) { mpGame.guardInput('monitor', !mpGame.desiredMonitor()); return; }
   if (!state || state.phase !== 'playing') return;
   if (state.monitorUp) { lowerCams(); camArmed = false; } else { camArmed = true; raiseCams(); }
 };
-overlay.onSelectCam = (camId) => { if (!state || state.phase !== 'playing' || !state.monitorUp) return; if (switchCam(state, camId)) { audio.oneShot('camBlip'); world.setCamView(state.activeCam); world.staticBurst(); } };
-overlay.onDoor = (side) => { if (state && state.phase === 'playing') toggleDoor(side); };
-overlay.onLight = (side) => { if (state && state.phase === 'playing') toggleLight(side); };
+overlay.onSelectCam = (camId) => {
+  if (mpGuardActive()) { mpGame.guardInput('monitor', true); mpGame.guardInput('cam', camId); return; }
+  if (!state || state.phase !== 'playing' || !state.monitorUp) return; if (switchCam(state, camId)) { audio.oneShot('camBlip'); world.setCamView(state.activeCam); world.staticBurst(); }
+};
+overlay.onDoor = (side) => { if (mpGuardActive()) { mpGame.guardInput('door', side); return; } if (state && state.phase === 'playing') toggleDoor(side); };
+overlay.onLight = (side) => { if (mpGuardActive()) { mpGame.guardInput('light', side); return; } if (state && state.phase === 'playing') toggleLight(side); };
 overlay.onPhoneLine = () => audio.phoneBlip(); // soft blip as each line appears
 overlay.onMenuHover = () => audio.menuHover();  // hover tick on menu rows
 
@@ -245,14 +288,30 @@ overlay.onMenuHover = () => audio.menuHover();  // hover tick on menu rows
 // moving back above `lowerZone` lowers it. The gap between the two is hysteresis so it can't
 // flicker at the boundary. setMonitor is idempotent, so the whir only fires on a real change.
 window.addEventListener('mousemove', (e) => {
-  if (!state || state.phase !== 'playing') return;
   const fy = e.clientY / window.innerHeight;
+  if (mpGuardActive()) { // hover raises/lowers the guard's monitor (sent to the host)
+    if (fy < CONFIG.cameras.lowerZone && mpGame.desiredMonitor()) mpGame.guardInput('monitor', false);
+    else if (fy > CONFIG.cameras.raiseZone && !mpGame.desiredMonitor()) mpGame.guardInput('monitor', true);
+    return;
+  }
+  if (!state || state.phase !== 'playing') return;
   if (fy < CONFIG.cameras.lowerZone) { camArmed = true; if (state.monitorUp) lowerCams(); } // moving up lowers + re-arms
   else if (fy > CONFIG.cameras.raiseZone) raiseCams();                                       // dipping to the bottom raises
 });
 
 // Keyboard still works: A/D doors, Q/E lights, F flashlight, C cameras toggle, 1/2/3/4/7 cams.
 window.addEventListener('keydown', (e) => {
+  if (mpGuardActive()) {
+    const mk = e.key.toLowerCase(), camMap = { '1': 'CAM1A', '2': 'CAM2', '3': 'CAM3', '4': 'CAM4', '7': 'CAM7' };
+    if (mk === 'a') mpGame.guardInput('door', 'L');
+    else if (mk === 'd') mpGame.guardInput('door', 'R');
+    else if (mk === 'q') mpGame.guardInput('light', 'L');
+    else if (mk === 'e') mpGame.guardInput('light', 'R');
+    else if (mk === 'f') mpGame.guardInput('flash');
+    else if (mk === 'c') mpGame.guardInput('monitor', !mpGame.desiredMonitor());
+    else if (camMap[mk]) { mpGame.guardInput('monitor', true); mpGame.guardInput('cam', camMap[mk]); }
+    return;
+  }
   if (!state || state.phase !== 'playing') return;
   const k = e.key.toLowerCase();
   if (k === 'a') toggleDoor('L');
@@ -340,6 +399,8 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.25, (now - last) / 1000);
   last = now;
+  // Multiplayer match takes over the loop while it's running (and during the result hold).
+  if (mpGame) { if (mpGame.isActive()) mpGame.frame(dt); requestAnimationFrame(frame); return; }
   if (state && state.phase === 'playing') {
     const ticks = acc.feed(dt);
     for (let i = 0; i < ticks && state.phase === 'playing'; i++) tick();
