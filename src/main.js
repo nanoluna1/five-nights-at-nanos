@@ -59,9 +59,11 @@ const mp = createMpMenu(app, {
   onHost: (name) => hostGame(name),
   onJoin: (name) => { myName = (name || '').trim() || 'Nano'; mp.showJoinEntry(); },
   onSubmitCode: (code) => joinGame(code),
+  onJoinLanding: (name) => { audio.resume(); myName = (name || '').trim() || 'Nano'; if (pendingJoinCode) joinGame(pendingJoinCode); },
   onStart: () => startMpGame(),
   onSpinPressed: () => onSpinPressed(),
 });
+let pendingJoinCode = null; // code from a ?join=… share link
 
 let spinState = null;        // host-only: { order, remaining, guardAssigned, assigned, turnIdx, rng }
 let mpGame = null;           // active multiplayer match (Slice 3), or null
@@ -465,4 +467,7 @@ function frame(now) {
 }
 
 gotoMenu();
+// If opened from a share link (?join=CODE), drop straight onto the join landing screen.
+const joinParam = new URLSearchParams(location.search).get('join');
+if (joinParam) { pendingJoinCode = joinParam; mp.showJoinLanding(joinParam); }
 requestAnimationFrame(frame);

@@ -56,6 +56,17 @@ export function createMpMenu(rootEl, hooks = {}) {
   codeText.title = 'click to copy';
   codeText.onclick = () => { try { navigator.clipboard && navigator.clipboard.writeText(codeText.textContent); } catch (e) {} };
   codeWrap.appendChild(codeText); lobby.appendChild(codeWrap);
+  // shareable join link (click to copy) — opening it auto-fills the code and lands on the join screen
+  let shareLink = '';
+  const linkWrap = el('div', 'position:absolute;top:124px;left:50%;transform:translateX(-50%);text-align:center;max-width:72%;');
+  linkWrap.appendChild(el('div', 'font-size:11px;letter-spacing:2px;color:#8a8a90;margin-bottom:4px;', 'OR SEND THIS LINK  (click to copy)'));
+  const linkText = el('div', 'font-size:13px;color:#7aa7d8;cursor:pointer;word-break:break-all;text-decoration:underline;', '');
+  linkText.onclick = () => {
+    try { navigator.clipboard && navigator.clipboard.writeText(shareLink); } catch (e) {}
+    linkText.textContent = '✓ Copied to clipboard!'; linkText.style.color = '#7dd6a8'; linkText.style.textDecoration = 'none';
+    setTimeout(() => { linkText.textContent = shareLink; linkText.style.color = '#7aa7d8'; linkText.style.textDecoration = 'underline'; }, 1400);
+  };
+  linkWrap.appendChild(linkText); lobby.appendChild(linkWrap);
   const listWrap = el('div', 'position:absolute;left:8%;top:52%;transform:translateY(-50%);width:300px;');
   listWrap.appendChild(el('div', 'font-size:13px;letter-spacing:2px;color:#8a8a90;margin-bottom:10px;', 'PLAYERS'));
   const listEl = el('div', ''); listWrap.appendChild(listEl); lobby.appendChild(listWrap);
@@ -84,6 +95,30 @@ export function createMpMenu(rootEl, hooks = {}) {
   const backJoin = hoverable(el('div', 'margin-top:34px;font-size:15px;color:#6a6a72;cursor:pointer;width:fit-content;', '‹ Back'));
   backJoin.onclick = () => h.onBack && h.onBack(); join.appendChild(backJoin);
   root.appendChild(join);
+
+  // ===== JOIN LANDING (opened from a share link: ?join=CODE) =====
+  const landing = el('div', 'position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;padding-left:9%;');
+  titleBlock(landing);
+  const landingRoom = el('div', 'margin-top:22px;font-size:15px;letter-spacing:1px;color:#8a8a90;', '');
+  landing.appendChild(landingRoom);
+  const landWrap = el('div', 'margin-top:24px;');
+  landWrap.appendChild(el('div', 'font-size:13px;letter-spacing:2px;color:#8a8a90;margin-bottom:6px;', 'YOUR NAME'));
+  const landName = el('input', inputCss); landName.maxLength = 16; landName.placeholder = 'Nano';
+  landWrap.appendChild(landName); landing.appendChild(landWrap);
+  const landStatus = el('div', 'margin-top:12px;font-size:14px;color:#6fae7e;height:18px;', '');
+  landing.appendChild(landStatus);
+  const landJoinBtn = hoverable(el('div', 'margin-top:16px;width:fit-content;' + btnCss, '» Join game'), true);
+  function updateLandJoin() {
+    const ok = landName.value.trim().length > 0;
+    landJoinBtn._disabled = !ok;
+    landJoinBtn.style.opacity = ok ? '1' : '0.4';
+    landJoinBtn.style.cursor = ok ? 'pointer' : 'default';
+  }
+  landName.addEventListener('input', updateLandJoin);
+  landName.onkeydown = (e) => { if (e.key === 'Enter' && !landJoinBtn._disabled && h.onJoinLanding) h.onJoinLanding(landName.value); };
+  landJoinBtn.onclick = () => { if (!landJoinBtn._disabled && h.onJoinLanding) h.onJoinLanding(landName.value); };
+  landing.appendChild(landJoinBtn);
+  root.appendChild(landing);
 
   // ===== SPIN (role wheel) =====
   const spin = el('div', 'position:absolute;inset:0;display:none;');
@@ -135,6 +170,7 @@ export function createMpMenu(rootEl, hooks = {}) {
     spin.style.display = which === 'spin' ? 'block' : 'none';
     reveal.style.display = which === 'reveal' ? 'flex' : 'none';
     over.style.display = which === 'over' ? 'flex' : 'none';
+    landing.style.display = which === 'landing' ? 'flex' : 'none';
   }
   function renderAssigned(list) {
     assignedList.innerHTML = '';
@@ -165,7 +201,8 @@ export function createMpMenu(rootEl, hooks = {}) {
   return {
     showHome() { showScreen('home'); nameInput.focus(); },
     showJoinEntry() { showScreen('join'); joinStatus.textContent = ''; codeInput.focus(); },
-    showHostLobby(code) { showScreen('lobby'); codeText.textContent = code; },
+    showHostLobby(code) { showScreen('lobby'); codeText.textContent = code; shareLink = location.origin + location.pathname + '?join=' + code; linkText.textContent = shareLink; },
+    showJoinLanding(code) { showScreen('landing'); landingRoom.textContent = 'Joining room:  ' + code; landName.value = ''; landStatus.textContent = ''; updateLandJoin(); landName.focus(); },
     setRoster(players, opts) { renderRoster(players, opts); },
     // ---- spin wheel ----
     showSpin() { showScreen('spin'); },
@@ -192,7 +229,7 @@ export function createMpMenu(rootEl, hooks = {}) {
       revealNote.textContent = 'The night begins…  (live match coming in the next update)';
     },
     setStatus(text) { statusEl.textContent = text || ''; },
-    setJoinStatus(text) { joinStatus.textContent = text || ''; },
+    setJoinStatus(text) { joinStatus.textContent = text || ''; landStatus.textContent = text || ''; },
     nameValue() { return nameInput.value; },
     showMatchOver(winner, myRole, killerName) {
       showScreen('over');
