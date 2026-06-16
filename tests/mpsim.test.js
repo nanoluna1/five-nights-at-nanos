@@ -64,6 +64,14 @@ test('power-out is an animatronics win', () => {
   assert.equal(m.killerName, 'the dark');
 });
 
+test('multiplayer power is forgiving — a moderate guard load lasts the night', () => {
+  const m = createMatch(1, A);
+  m.state.doors.R = true; m.state.monitorUp = true; // ~2 active draws the whole match
+  for (let i = 0; i < 360 && m.phase === 'playing'; i++) stepMatch(m, 1);
+  assert.equal(m.winner, 'guard', 'should reach 6 AM, not power-out');
+  assert.ok(m.state.power > 0, 'power should survive a moderate load with the MP rates');
+});
+
 test('snapshot is serializable and carries the anim + guard state', () => {
   const m = createMatch(1, A);
   matchTeleport(m, 'r', 'DOOR_R');

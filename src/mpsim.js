@@ -103,7 +103,7 @@ export function stepMatch(m, dt) {
   if (m.phase !== 'playing') return;
   const s = m.state;
   recomputeUsage(s);
-  const shutdown = drainPower(s, dt);
+  const shutdown = drainPower(s, dt, { base: CONFIG.power.mpBasePerSec, perUnit: CONFIG.power.mpPerUnitPerSec });
   advanceClock(s, dt);
   for (const name of Object.keys(m.anims)) {
     const a = m.anims[name];

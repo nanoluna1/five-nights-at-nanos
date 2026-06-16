@@ -7,6 +7,10 @@ export const CONFIG = {
                               // can't just sit there — but on its own it won't kill you over a night.
     drainPerUnitPerSec: 0.15, // each active door/light/cam. A single active bar still lasts the night
                               // (~10% to spare); two or more burn out before 6 AM.
+    // Multiplayer is more forgiving (you're up against human animatronics and lean on the doors/cams
+    // far more than vs the AI). Roughly half the single-player drain so power is pressure, not doom.
+    mpBasePerSec: 0.05,
+    mpPerUnitPerSec: 0.07,
   },
   flashlight: {
     drainPerSec: 4.0,         // separate budget from main power; punishes holding the beam on

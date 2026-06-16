@@ -13,9 +13,12 @@ export function recomputeUsage(state) {
   state.usageLoad = load;
 }
 
-// Returns true if this drain triggered a shutdown (power hit 0).
-export function drainPower(state, seconds) {
-  const rate = CONFIG.power.drainBasePerSec + state.usageLoad * CONFIG.power.drainPerUnitPerSec;
+// Returns true if this drain triggered a shutdown (power hit 0). `rates` optionally overrides the
+// per-second base/per-unit drain (multiplayer passes its own, more forgiving values).
+export function drainPower(state, seconds, rates) {
+  const base = rates ? rates.base : CONFIG.power.drainBasePerSec;
+  const perUnit = rates ? rates.perUnit : CONFIG.power.drainPerUnitPerSec;
+  const rate = base + state.usageLoad * perUnit;
   state.power = Math.max(0, state.power - rate * seconds);
   if (state.flashlight.on) {
     state.flashlight.charge = Math.max(0, state.flashlight.charge - CONFIG.flashlight.drainPerSec * seconds);
