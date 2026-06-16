@@ -48,7 +48,9 @@ function gotoMenu() {
 function startNight(night) {
   audio.resume();
   state = createGameState(night);
-  rng = makeRng(night * 1000 + 7);
+  // Seed with real entropy so each playthrough of a night differs — a fixed per-night seed meant
+  // the SAME (sometimes unlucky) AI sequence every single time, which could doom a given night.
+  rng = makeRng((Date.now() ^ (night * 0x9e3779b1)) >>> 0);
   prevRoom = {}; prevAtDoor = {};
   for (const [name, a] of Object.entries(state.animatronics)) { prevRoom[name] = a.room; prevAtDoor[name] = a.atDoor; }
   warnedLowPower = false;

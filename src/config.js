@@ -14,12 +14,13 @@ export const CONFIG = {
   ai: {
     tickHz: 10,               // logic ticks/sec; AI move-rolls happen on this cadence
     moveRollEverySec: 5,      // a creature attempts to advance every 5s (rolls vs difficulty)
-    difficulty: {             // per-night, 0-20 (chance gate on each move roll = d/20)
-      1: { har: 0,  gi: 2,  cluck: 2,  arg: 2 },   // Cluck now actually participates (was 0 = never moved)
-      2: { har: 2,  gi: 4,  cluck: 5,  arg: 4 },
-      3: { har: 4,  gi: 6,  cluck: 9,  arg: 6 },   // Cluck mid-week spike
-      4: { har: 8,  gi: 9,  cluck: 11, arg: 9 },
-      5: { har: 14, gi: 12, cluck: 14, arg: 12 },  // relentless
+    difficulty: {             // per-night, 0-20 (chance gate on each move roll = d/20). At 0 a
+                              // walker NEVER advances, so night 1 is a near-threatless tutorial.
+      1: { har: 0,  gi: 0,  cluck: 0, arg: 1 },   // tutorial: nobody walks; just learn the cove cam
+      2: { har: 1,  gi: 2,  cluck: 1, arg: 2 },
+      3: { har: 2,  gi: 3,  cluck: 4, arg: 4 },    // Cluck starts pressing the right side
+      4: { har: 4,  gi: 5,  cluck: 6, arg: 6 },
+      5: { har: 7,  gi: 8,  cluck: 8, arg: 9 },    // tough but fair (was 14/12/14/12 = brutal)
     },
     harLowPowerBoost: 6,      // added to Har's effective difficulty while power < lowPowerThreshold
     harLowPowerThreshold: 30, // % power below which Har gets more aggressive (punishes low power)
@@ -41,10 +42,12 @@ export const CONFIG = {
     // Arg's cove "emergence" meter (0-100): fills while CAM7 is NOT being watched, drains
     // while you watch it. At 100 he sprints the right hall. Fill scales with difficulty so
     // later nights punish camera neglect harder. This is why watching the cove matters.
-    // Tuned DOWN (was 4.0) — he was emerging far too often. Watching the cove HOLDS him at his
-    // current stage (no recover constant any more): he never recedes while watched, only freezes;
-    // he advances only while the cove is unwatched. See stepArg in ai.js.
-    argEmergenceFillBasePerSec: 2.2,
+    // Tuned DOWN (was 4.0, then 2.2) — he was emerging far too often. Watching the cove HOLDS him
+    // at his current stage (no recover constant any more): he never recedes while watched, only
+    // freezes; he advances only while the cove is unwatched. See stepArg in ai.js. Note the 0.5
+    // floor in the fill formula means he creeps even at difficulty 0/1 — that's the gentle night-1
+    // teaching threat (you have ~100s+ to learn to check the cove).
+    argEmergenceFillBasePerSec: 1.8,
     argWarnAt: 68,            // emergence % at which his running-footsteps tell plays ("he's coming")
     // Cove emergence visual stages (by emergence %): 1 closed, 2 parted, 3 out-as-figure.
     // At 100 he COMMITS (stage 4: empty cove + "out of order" sign) and, after a delay, sprints.

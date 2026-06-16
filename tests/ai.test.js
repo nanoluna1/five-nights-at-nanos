@@ -11,6 +11,19 @@ function isolate(s, keep) {
   s.monitorUp = true; s.activeCam = 'CAM7'; // park on cove so Arg stays down by default
 }
 
+test('night 1 is a safe tutorial: no walker advances and watching the cove survives the night', () => {
+  const s = createGameState(1);
+  s.monitorUp = true; s.activeCam = 'CAM7';        // a player who just watches the cove
+  s.doors.L = false; s.doors.R = false;            // and never even closes a door
+  const rng = makeRng(20240617);
+  for (let i = 0; i < 800; i++) stepAI(s, 0.5, rng); // 400 in-game seconds (> a full night)
+  for (const name of ['har', 'gi', 'cluck']) {
+    assert.equal(s.animatronics[name].pathIndex, 0, name + ' should not move on night 1');
+    assert.equal(s.animatronics[name].atDoor, null);
+  }
+  assert.equal(s.pendingScare, null, 'night 1 must be survivable just by watching the cove');
+});
+
 test('har with difficulty 0 never advances', () => {
   const s = createGameState(1); // night 1 har difficulty = 0
   isolate(s, 'har');
