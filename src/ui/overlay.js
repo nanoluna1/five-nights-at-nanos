@@ -111,23 +111,28 @@ export function createOverlay(rootEl, handlers) {
   mapWrap.appendChild(el('div', 'font-size:11px;letter-spacing:2px;color:#5a5a62;margin-bottom:6px;', 'CAMERA MAP'));
   const grid = el('div', 'position:relative;width:100%;height:206px;'); mapWrap.appendChild(grid);
   const camBtns = {};
-  // Faint corridor lines so the map reads as a building floor-plan (halls feeding the office),
-  // drawn first so the room buttons sit on top. Spatial layout (not a flat grid): top row is the
-  // show area + cove, the two halls flank the middle, closet hangs off the left hall, and the
-  // office sits at the bottom centre fed by both halls.
-  const corridor = (css) => { const c = el('div', 'position:absolute;background:rgba(58,109,122,0.28);' + css); grid.appendChild(c); };
-  corridor('left:21%;top:50%;width:2px;height:34%;');   // left hall → office
-  corridor('left:77%;top:50%;width:2px;height:34%;');   // right hall → office
-  corridor('left:21%;top:83.5%;width:56%;height:2px;'); // spine linking both halls under the office
-  corridor('left:21%;top:43%;width:2px;height:13%;');   // closet stub off the left hall
-  // [id, label, left%, top%, width%, height%] — spatial floor-plan matching the UI reference
+  // Spatial floor-plan matching five_nights_at_nanos_ui_layout_reference.svg (panel C): stage +
+  // dining across the top; the two halls then the cove (far right) on the middle row; the closet
+  // lower-left; the office at the bottom centre. Two faint links tie the office into the map.
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 100 100'); svg.setAttribute('preserveAspectRatio', 'none');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
+  for (const [x1, y1, x2, y2] of [[34, 76, 49, 85], [78, 76, 59, 85]]) {
+    const ln = document.createElementNS(NS, 'line');
+    ln.setAttribute('x1', x1); ln.setAttribute('y1', y1); ln.setAttribute('x2', x2); ln.setAttribute('y2', y2);
+    ln.setAttribute('stroke', '#34333c'); ln.setAttribute('stroke-width', '1');
+    svg.appendChild(ln);
+  }
+  grid.appendChild(svg);
+  // [id, label, left%, top%, width%, height%] — coordinates lifted from the reference layout
   const layout = [
-    ['CAM1A', 'CAM 1A stage',  18, 3,  24, 20],
-    ['CAM1B', 'CAM 1B dining', 44, 3,  24, 20],
-    ['CAM7',  'CAM 7 cove',    70, 3,  24, 20],
-    ['CAM2',  'CAM 2 hall L',  10, 30, 24, 20],
-    ['CAM4',  'CAM 4 hall R',  66, 30, 24, 20],
-    ['CAM3',  'CAM 3 closet',  10, 56, 24, 20],
+    ['CAM1A', 'CAM 1A stage',  24, 3,  24, 19],
+    ['CAM1B', 'CAM 1B dining', 55, 3,  24, 19],
+    ['CAM2',  'CAM 2 hall L',  24, 29, 24, 22],
+    ['CAM4',  'CAM 4 hall R',  55, 29, 24, 22],
+    ['CAM7',  'CAM 7 cove',    82, 29, 16, 22],
+    ['CAM3',  'CAM 3 closet',  15, 56, 21, 19],
   ];
   for (const [id, label, x, y, w, ht] of layout) {
     const active = ACTIVE.has(id);
@@ -139,7 +144,7 @@ export function createOverlay(rootEl, handlers) {
     grid.appendChild(b); camBtns[id] = { node: b, active };
   }
   // office marker (lowers the monitor)
-  const officeMark = el('div', 'position:absolute;left:40%;top:80%;width:20%;height:16%;border:1px solid #3b6d11;color:#97c459;' +
+  const officeMark = el('div', 'position:absolute;left:44%;top:84%;width:16%;height:14%;border:1px solid #3b6d11;color:#97c459;' +
     'display:flex;align-items:center;justify-content:center;font-size:9px;cursor:pointer;', 'office');
   officeMark.onclick = () => { if (typeof api.onToggleMonitor === 'function') api.onToggleMonitor(); };
   grid.appendChild(officeMark);
