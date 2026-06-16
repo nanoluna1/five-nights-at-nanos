@@ -10,6 +10,9 @@ import { clockText, powerPct } from './hudfmt.js';
 import { createAudio } from './audio.js';
 import { createWorld } from './render/world.js';
 import { createOverlay } from './ui/overlay.js';
+import { createMpMenu } from './ui/mpmenu.js';
+import { makeRoomCode, createLobby } from './lobby.js';
+import { createPeerHost, createPeerClient } from './net.js';
 
 const app = document.getElementById('app');
 const audio = createAudio();
@@ -37,7 +40,82 @@ const overlay = createOverlay(app, {
   onNewGame: () => startNight(1),
   onContinue: () => startNight(loadSave(store).lastPlayed),
   onNightSelect: (n) => startNight(n),
+  onMultiplayer: () => { audio.resume(); mp.showHome(); },
 });
+
+// ===================== multiplayer (Slice 1: lobby & connection) =====================
+// Host-authoritative P2P via PeerJS (lazy-loaded). The host owns the roster; clients render the
+// roster snapshots it broadcasts. Slice 2 will add the spin wheel; Slice 3 the synced night.
+let mpNet = null;     // active transport (host or client endpoint)
+let mpLobby = null;   // host-only roster
+let myName = 'Nano';
+
+const mp = createMpMenu(app, {
+  onHover: () => audio.menuHover(),
+  onBack: () => { teardownMp(); mp.hide(); overlay.showMenu(loadSave(store)); },
+  onHost: (name) => hostGame(name),
+  onJoin: (name) => { myName = (name || '').trim() || 'Nano'; mp.showJoinEntry(); },
+  onSubmitCode: (code) => joinGame(code),
+  onStart: () => startMpGame(),
+});
+
+function teardownMp() { if (mpNet) { try { mpNet.close(); } catch (e) {} } mpNet = null; mpLobby = null; }
+
+function hostGame(name) {
+  myName = (name || '').trim() || 'Nano';
+  const code = makeRoomCode();
+  mpLobby = createLobby();
+  mpLobby.add('HOST', myName, true);
+  mp.showHostLobby(code);
+  mp.setRoster(mpLobby.players(), { isHost: true });
+  mp.setStatus('Opening room…');
+  createPeerHost(code, {
+    onReady: () => mp.setStatus('Room open — share the code and wait for players'),
+    onError: (e) => mp.setStatus('Could not open room (' + e + '). Are you offline?'),
+    onMessage: (id, msg) => {
+      if (msg && msg.type === 'hello') {
+        mpLobby.add(id, msg.name);
+        if (mpNet) mpNet.broadcast({ type: 'roster', players: mpLobby.players() });
+        mp.setRoster(mpLobby.players(), { isHost: true });
+      }
+    },
+    onLeave: (id) => {
+      mpLobby.remove(id);
+      if (mpNet) mpNet.broadcast({ type: 'roster', players: mpLobby.players() });
+      mp.setRoster(mpLobby.players(), { isHost: true });
+    },
+  }).then((host) => { mpNet = host; }).catch(() => mp.setStatus('Could not open room. Are you offline?'));
+}
+
+function joinGame(code) {
+  if (!code) { mp.setJoinStatus('Enter a room code'); return; }
+  mp.setJoinStatus('Connecting…');
+  createPeerClient(code, {
+    onMessage: (msg) => {
+      if (!msg) return;
+      if (msg.type === 'roster') {
+        mp.showHostLobby(code);
+        mp.setRoster(msg.players, { isHost: false });
+        mp.setStatus('In the lobby — waiting for the host to start');
+      } else if (msg.type === 'start') {
+        mp.setStatus('Roles spinning… (coming in the next update)');
+      }
+    },
+    onClose: () => mp.setStatus('Host disconnected'),
+    onError: (e) => mp.setJoinStatus('Could not connect (' + e + ')'),
+  }).then((client) => {
+    if (!client) { mp.setJoinStatus('Could not connect — check the code (or you may be offline)'); return; }
+    mpNet = client;
+    mp.setJoinStatus('Connected — joining lobby…');
+    client.send({ type: 'hello', name: myName });
+  });
+}
+
+function startMpGame() {
+  if (!mpNet || !mpNet.isHost) return;
+  mpNet.broadcast({ type: 'start' });
+  mp.setStatus('Roles spinning… (coming in the next update)'); // Slice 2
+}
 
 function gotoMenu() {
   state = createGameState(1);

@@ -31,6 +31,7 @@ export function createOverlay(rootEl, handlers) {
   const rowNew = menuRow('» New game', () => h.onNewGame && h.onNewGame(), true);
   const rowCont = menuRow('Continue', () => h.onContinue && h.onContinue());
   const rowNight = menuRow('Night select', () => { nightWrap.style.display = nightWrap.style.display === 'none' ? 'flex' : 'none'; });
+  const rowMp = menuRow('Multiplayer', () => h.onMultiplayer && h.onMultiplayer());
   const nightWrap = el('div', 'position:relative;margin-top:6px;display:none;gap:10px;');
   menuRows.appendChild(nightWrap);
   const tagline = el('div', 'position:absolute;bottom:18px;left:9%;color:#46464c;font-size:12px;', "v1.0  •  flickering static title  •  ambient hum");
