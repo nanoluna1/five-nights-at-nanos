@@ -111,14 +111,23 @@ export function createOverlay(rootEl, handlers) {
   mapWrap.appendChild(el('div', 'font-size:11px;letter-spacing:2px;color:#5a5a62;margin-bottom:6px;', 'CAMERA MAP'));
   const grid = el('div', 'position:relative;width:100%;height:206px;'); mapWrap.appendChild(grid);
   const camBtns = {};
-  // [id, label, left%, top%, width%, height%] — matches the UI reference layout
+  // Faint corridor lines so the map reads as a building floor-plan (halls feeding the office),
+  // drawn first so the room buttons sit on top. Spatial layout (not a flat grid): top row is the
+  // show area + cove, the two halls flank the middle, closet hangs off the left hall, and the
+  // office sits at the bottom centre fed by both halls.
+  const corridor = (css) => { const c = el('div', 'position:absolute;background:rgba(58,109,122,0.28);' + css); grid.appendChild(c); };
+  corridor('left:21%;top:50%;width:2px;height:34%;');   // left hall → office
+  corridor('left:77%;top:50%;width:2px;height:34%;');   // right hall → office
+  corridor('left:21%;top:83.5%;width:56%;height:2px;'); // spine linking both halls under the office
+  corridor('left:21%;top:43%;width:2px;height:13%;');   // closet stub off the left hall
+  // [id, label, left%, top%, width%, height%] — spatial floor-plan matching the UI reference
   const layout = [
-    ['CAM1A', 'CAM 1A stage', 7, 2, 41, 20],
-    ['CAM1B', 'CAM 1B dining', 52, 2, 41, 20],
-    ['CAM2', 'CAM 2 hall L', 7, 28, 41, 20],
-    ['CAM4', 'CAM 4 hall R', 52, 28, 41, 20],
-    ['CAM3', 'CAM 3 closet', 7, 54, 41, 20],
-    ['CAM7', 'CAM 7 cove', 52, 54, 41, 20],
+    ['CAM1A', 'CAM 1A stage',  18, 3,  24, 20],
+    ['CAM1B', 'CAM 1B dining', 44, 3,  24, 20],
+    ['CAM7',  'CAM 7 cove',    70, 3,  24, 20],
+    ['CAM2',  'CAM 2 hall L',  10, 30, 24, 20],
+    ['CAM4',  'CAM 4 hall R',  66, 30, 24, 20],
+    ['CAM3',  'CAM 3 closet',  10, 56, 24, 20],
   ];
   for (const [id, label, x, y, w, ht] of layout) {
     const active = ACTIVE.has(id);
