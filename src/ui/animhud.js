@@ -1,6 +1,6 @@
 // Animatronic player's HUD (multiplayer): role + clock up top, a teleport mini-map (white dots) at
 // the bottom, and a KILL button that appears at a door. Pure DOM; the caller wires the hooks.
-import { NODES } from '../mpsim.js';
+import { NODES, ADJ } from '../mpsim.js';
 
 const ROLEUP = (r) => ({ har: 'Har', gi: 'Gi', cluck: 'Cluck', arg: 'Arg' }[r] || String(r || ''));
 
@@ -48,17 +48,19 @@ export function createAnimHud(rootEl, hooks = {}) {
       const a = snap.anims && snap.anims[myName];
       clockLbl.textContent = clockText(snap.clockMinutes);
       const cd = a ? a.cooldown : 0;
+      const reachable = a ? (ADJ[a.node] || []) : []; // only neighbours of the current node
       for (const id in dots) {
         const d = dots[id], cur = a && a.node === id;
+        const canGo = !!(a && reachable.includes(id) && cd <= 0.05 && snap.phase === 'playing');
         d.style.boxShadow = cur ? '0 0 10px #e8b23a' : 'none';
-        d.style.background = cur ? '#e8b23a' : '#e6e2d6';
-        d._locked = cd > 0.05 || snap.phase !== 'playing';
-        d.style.opacity = cd > 0.05 ? '0.4' : '1';
+        d.style.background = cur ? '#e8b23a' : (canGo ? '#e6e2d6' : '#3a3a40');
+        d._locked = !canGo;
+        d.style.opacity = (cur || canGo) ? '1' : '0.4';
       }
       if (snap.phase !== 'playing') statusLbl.textContent = '—';
       else if (cd > 0.05) statusLbl.textContent = 'Teleport cooldown… ' + cd.toFixed(1) + 's';
       else if (a && a.atDoor) statusLbl.textContent = 'At the door — press KILL';
-      else statusLbl.textContent = 'Pick a node to teleport';
+      else statusLbl.textContent = 'Tap a lit (adjacent) node to move';
       const atDoor = a && a.atDoor && snap.phase === 'playing';
       if (atDoor) {
         killBtn.style.display = 'block';

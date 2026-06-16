@@ -15,6 +15,7 @@ import { createAnimHud } from './ui/animhud.js';
 import { makeRoomCode, createLobby, ROLES, planRoles } from './lobby.js';
 import { createPeerHost, createPeerClient } from './net.js';
 import { createMpGame } from './mpgame.js';
+import { cheats } from './cheats.js';
 
 const app = document.getElementById('app');
 const audio = createAudio();
@@ -89,15 +90,20 @@ function showCheatToast(text) {
   clearTimeout(cheatToastTimer);
   cheatToastTimer = setTimeout(() => { cheatToastEl.style.display = 'none'; }, 2200);
 }
+function armCluckGif() {
+  cheats.cluckGif = true;
+  if (!cheats.cluckImg) { const img = new Image(); img.src = 'Cluck.gif'; cheats.cluckImg = img; }
+  showCheatToast('Cheat: Cluck is now 😭');
+}
 let cheatBuf = '';
 window.addEventListener('keydown', (e) => {
-  if (!(mpNet && mpNet.isHost)) return;        // host only
-  if (mpGame && mpGame.isActive()) return;     // not during the live match (1/2 are camera keys there)
+  if (mpGame && mpGame.isActive()) return;     // during the live match 1-4/7 are camera keys
+  if (!mpNet) return;                          // only meaningful in the multiplayer flow
   const k = e.key;
-  if (k >= '0' && k <= '9') {
-    cheatBuf = (cheatBuf + k).slice(-2);
-    if (cheatBuf === '12') { cheatHostGuard = true; cheatBuf = ''; showCheatToast('Cheat armed — you will be the GUARD'); }
-  } else cheatBuf = '';
+  if (k < '0' || k > '9') { cheatBuf = ''; return; }
+  cheatBuf = (cheatBuf + k).slice(-2);
+  if (cheatBuf === '12' && mpNet.isHost) { cheatBuf = ''; cheatHostGuard = true; showCheatToast('Cheat armed — you will be the GUARD'); } // host only
+  else if (cheatBuf === '13') { cheatBuf = ''; armCluckGif(); } // any player (cosmetic, local)
 });
 
 function hostGame(name) {

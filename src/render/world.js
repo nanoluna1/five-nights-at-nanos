@@ -6,6 +6,7 @@ import { drawOfficeBackdrop, drawDoorway, drawWindow, drawRoom, drawJumpscareBg 
 import { drawCove } from './cove.js';        // Arg's staged Pirate Cove (CAM7)
 import { CONFIG } from '../config.js';        // for Arg cove-stage thresholds
 import { NODES } from '../mpsim.js';          // teleport-node labels for the animatronic POV
+import { cheats } from '../cheats.js';        // client-local cosmetic cheats (Cluck meme image)
 
 export function createWorld(mountEl) {
   const canvas = document.createElement('canvas');
@@ -35,7 +36,13 @@ export function createWorld(mountEl) {
   const DRAW = {
     har: (x, y, s, g) => drawHar(ctx, x, y, s, g),
     gi: (x, y, s, g) => drawGi(ctx, x, y, s, g),
-    cluck: (x, y, s, g) => drawCluck(ctx, x, y, s, g),
+    cluck: (x, y, s, g) => {
+      const im = cheats.cluckGif && cheats.cluckImg;
+      if (im && im.complete && im.naturalWidth) {
+        const h = 280 * s, w = h * (im.naturalWidth / im.naturalHeight);
+        ctx.drawImage(im, x - w / 2, y - h / 2, w, h);
+      } else drawCluck(ctx, x, y, s, g);
+    },
     arg: (x, y, s, g) => drawArg(ctx, x, y, s, g),
   };
 

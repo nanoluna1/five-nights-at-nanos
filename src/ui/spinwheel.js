@@ -1,7 +1,10 @@
 // Canvas spin wheel for multiplayer role assignment. Authored directly (no agy). The host decides
 // the landed role; every client animates its wheel to that same role so the spin stays in sync.
+import { cheats } from '../cheats.js';
+
 export function createSpinWheel(canvas) {
   const ctx = canvas.getContext('2d');
+  const cluckImgReady = () => cheats.cluckGif && cheats.cluckImg && cheats.cluckImg.complete && cheats.cluckImg.naturalWidth;
   const COLORS = { guard: '#6fae7e', har: '#8d6e63', gi: '#3a5f5f', cluck: '#d4af37', arg: '#3a602c' };
   const LABEL = { guard: 'GUARD', har: 'HAR', gi: 'GI', cluck: 'CLUCK', arg: 'ARG' };
   const TAU = Math.PI * 2;
@@ -18,8 +21,13 @@ export function createSpinWheel(canvas) {
       ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.stroke();
       const am = a0 + slice / 2, lx = cx + Math.cos(am) * R * 0.62, ly = cy + Math.sin(am) * R * 0.62;
       ctx.save(); ctx.translate(lx, ly); ctx.rotate(am + Math.PI / 2);
-      ctx.fillStyle = '#0b0b0d'; ctx.font = 'bold 20px Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(LABEL[roles[i]] || roles[i], 0, 0);
+      if (roles[i] === 'cluck' && cluckImgReady()) {
+        const ih = 52, iw = ih * (cheats.cluckImg.naturalWidth / cheats.cluckImg.naturalHeight);
+        ctx.drawImage(cheats.cluckImg, -iw / 2, -ih / 2, iw, ih);
+      } else {
+        ctx.fillStyle = '#0b0b0d'; ctx.font = 'bold 20px Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(LABEL[roles[i]] || roles[i], 0, 0);
+      }
       ctx.restore();
     }
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.strokeStyle = '#2a2a30'; ctx.lineWidth = 6; ctx.stroke();

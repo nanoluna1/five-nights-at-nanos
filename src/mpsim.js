@@ -17,12 +17,25 @@ export const NODES = [
   { id: 'DOOR_L', label: 'Left Door', x: 40, y: 88 },
   { id: 'DOOR_R', label: 'Right Door', x: 62, y: 88 },
 ];
-const ROOM_NODES = ['CAM1A', 'CAM1B', 'CAM7', 'CAM2', 'CAM4', 'CAM3'];
-const START_NODE = { har: 'CAM1A', gi: 'CAM2', cluck: 'CAM1B', arg: 'CAM7' };
+const START_NODE = 'CAM1A'; // everyone starts on the show stage
+
+// Teleport adjacency — you can only hop to a NEIGHBOURING dot (1 dot at a time). Symmetric graph;
+// the office doors hang off the halls, so you can't jump stage->door or door->door directly. The
+// minimum route to a door is Stage -> Dining -> Hall -> Door (3 hops).
+export const ADJ = {
+  CAM1A:  ['CAM1B'],                          // Stage -> Dining
+  CAM1B:  ['CAM1A', 'CAM2', 'CAM4', 'CAM7'],  // Dining (hub)
+  CAM7:   ['CAM1B', 'CAM4'],                  // Cove
+  CAM2:   ['CAM1B', 'CAM3', 'DOOR_L'],        // Left Hall
+  CAM4:   ['CAM1B', 'CAM7', 'DOOR_R'],        // Right Hall
+  CAM3:   ['CAM2'],                           // Closet
+  DOOR_L: ['CAM2'],                           // Left Door (office)
+  DOOR_R: ['CAM4'],                           // Right Door (office)
+};
 
 export const KILL_TIME = 5.0;     // seconds at the door before the strike lands (guard's window)
-export const TELEPORT_CD = 4.0;   // cooldown between teleports
-export const REPEL_CD = 6.0;      // longer cooldown after the guard slams the door on you
+export const TELEPORT_CD = 6.0;   // cooldown between teleports (longer)
+export const REPEL_CD = 9.0;      // a slammed door sends you back to the stage with a long cooldown
 
 function doorOf(node) { return node === 'DOOR_L' ? 'L' : node === 'DOOR_R' ? 'R' : null; }
 
@@ -32,7 +45,7 @@ export function createMatch(night, assignments) {
   const anims = {};
   for (const a of (assignments || [])) {
     if (a.role === 'guard') continue;
-    anims[a.role] = { id: a.id, name: a.name, node: START_NODE[a.role] || 'CAM1A', cooldown: 0, atDoor: null, killTimer: 0 };
+    anims[a.role] = { id: a.id, name: a.name, node: START_NODE, cooldown: 0, atDoor: null, killTimer: 0 };
   }
   return {
     night,
@@ -51,37 +64,33 @@ export function createMatch(night, assignments) {
   };
 }
 
-function repelSide(m, side, rand) {
+function repelSide(m, side) {
   for (const name of Object.keys(m.anims)) {
     const a = m.anims[name];
-    if (a.atDoor === side) {
-      a.atDoor = null; a.killTimer = 0;
-      a.node = ROOM_NODES[Math.floor((rand ? rand() : Math.random()) * ROOM_NODES.length) % ROOM_NODES.length];
-      a.cooldown = REPEL_CD;
-    }
+    if (a.atDoor === side) { a.atDoor = null; a.killTimer = 0; a.node = 'CAM1A'; a.cooldown = REPEL_CD; } // back to the stage
   }
 }
 
 // Guard input: toggle a door/light, raise/lower the monitor, switch cam, toggle the flashlight.
-export function matchGuard(m, kind, payload, rand) {
+export function matchGuard(m, kind, payload) {
   if (m.phase !== 'playing') return;
   const s = m.state;
-  if (kind === 'door') { const side = payload; s.doors[side] = !s.doors[side]; if (s.doors[side]) repelSide(m, side, rand); }
+  if (kind === 'door') { const side = payload; s.doors[side] = !s.doors[side]; if (s.doors[side]) repelSide(m, side); }
   else if (kind === 'light') { const side = payload; s.lights[side] = !s.lights[side]; }
   else if (kind === 'monitor') { s.monitorUp = !!payload; if (!s.monitorUp) s.flashlight.on = false; }
   else if (kind === 'cam') { if (s.monitorUp) s.activeCam = payload; }
   else if (kind === 'flash') { if (s.monitorUp) s.flashlight.on = !s.flashlight.on && s.flashlight.charge > 0; }
 }
 
-// Animatronic teleports to a node (if off cooldown). Reaching a DOOR arms it for a kill; leaving
-// a door cancels any kill in progress.
-export function matchTeleport(m, animId, node, rand) {
+// Animatronic teleports to a NEIGHBOURING node (if off cooldown). Reaching a DOOR arms it for a
+// kill; leaving a door cancels any kill in progress.
+export function matchTeleport(m, animId, node) {
   if (m.phase !== 'playing') return false;
   const name = Object.keys(m.anims).find(n => m.anims[n].id === animId);
   if (!name) return false;
   const a = m.anims[name];
   if (a.cooldown > 0) return false;
-  if (!NODES.some(nd => nd.id === node)) return false;
+  if (!(ADJ[a.node] || []).includes(node)) return false; // 1 dot at a time — neighbours only
   a.node = node; a.cooldown = TELEPORT_CD;
   const side = doorOf(node);
   if (side) a.atDoor = side; else { a.atDoor = null; a.killTimer = 0; }
