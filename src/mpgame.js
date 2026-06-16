@@ -86,10 +86,11 @@ export function createMpGame({ world, overlay, animHud, audio, net, isHost, myId
         if (nm === myRole && a.node !== pa.node) audio.oneShot('monitorWhir');     // my own teleport
       }
       if (snap.power <= CONFIG.audio.lowPowerWarnAt && p.power > CONFIG.audio.lowPowerWarnAt) audio.oneShot('lowPowerWarn');
+      for (const key in (snap.jam || {})) if (!(p.jam && p.jam[key])) audio.oneShot('lowPowerWarn'); // a control just jammed
     }
     const anims = {};
     for (const nm in snap.anims) anims[nm] = { node: snap.anims[nm].node, atDoor: snap.anims[nm].atDoor, killTimer: snap.anims[nm].killTimer };
-    prevA = { doors: { ...snap.doors }, lights: { ...snap.lights }, monitorUp: snap.monitorUp, activeCam: snap.activeCam, power: snap.power, anims };
+    prevA = { doors: { ...snap.doors }, lights: { ...snap.lights }, monitorUp: snap.monitorUp, activeCam: snap.activeCam, power: snap.power, anims, jam: { ...(snap.jam || {}) } };
   }
 
   function guardStateFrom(snap) {
@@ -102,7 +103,7 @@ export function createMpGame({ world, overlay, animHud, audio, net, isHost, myId
   }
   function guardHud(snap) {
     const sl = { clockMinutes: snap.clockMinutes, power: snap.power };
-    return { powerPct: powerPct(sl), usageLoad: snap.usageLoad, clockText: clockText(sl), night, flashlightPct: Math.round(snap.flashPct), camLabel: snap.monitorUp ? snap.activeCam : '—', monitorUp: snap.monitorUp, activeCam: snap.activeCam, doors: snap.doors, lights: snap.lights };
+    return { powerPct: powerPct(sl), usageLoad: snap.usageLoad, clockText: clockText(sl), night, flashlightPct: Math.round(snap.flashPct), camLabel: snap.monitorUp ? snap.activeCam : '—', monitorUp: snap.monitorUp, activeCam: snap.activeCam, doors: snap.doors, lights: snap.lights, jam: snap.jam || {} };
   }
 
   function stopWorker() { if (worker) { try { worker.postMessage('stop'); worker.terminate(); } catch (e) {} worker = null; } if (workerUrl) { try { URL.revokeObjectURL(workerUrl); } catch (e) {} workerUrl = null; } }

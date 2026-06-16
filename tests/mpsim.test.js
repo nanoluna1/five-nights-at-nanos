@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createMatch, matchGuard, matchTeleport, matchKill, stepMatch, snapshot, KILL_TIME, REPEL_CD } from '../src/mpsim.js';
+import { createMatch, matchGuard, matchTeleport, matchKill, stepMatch, snapshot, KILL_TIME, REPEL_CD, SPAM_LIMIT, JAM_TIME } from '../src/mpsim.js';
 
 const A = [
   { id: 'g', name: 'Guard', role: 'guard' },
@@ -78,6 +78,25 @@ test('multiplayer power is forgiving — a moderate guard load lasts the night',
   for (let i = 0; i < 360 && m.phase === 'playing'; i++) stepMatch(m, 1);
   assert.equal(m.winner, 'guard', 'should reach 6 AM, not power-out');
   assert.ok(m.state.power > 0, 'power should survive a moderate load with the MP rates');
+});
+
+test('spamming a control jams it, blocks input, then recovers (counter resets)', () => {
+  const m = createMatch(1, A);
+  for (let i = 0; i < SPAM_LIMIT; i++) { matchGuard(m, 'door', 'L'); stepMatch(m, 0.1); } // rapid toggling
+  assert.ok(snapshot(m).jam.doorL > 0, 'door L should jam after spamming');
+  const held = m.state.doors.L;
+  matchGuard(m, 'door', 'L');
+  assert.equal(m.state.doors.L, held, 'a jammed control ignores input');
+  for (let i = 0; i < JAM_TIME + 1; i++) stepMatch(m, 1);
+  assert.equal(snapshot(m).jam.doorL, undefined, 'jam clears after JAM_TIME');
+  matchGuard(m, 'door', 'L');
+  assert.notEqual(m.state.doors.L, held, 'control works again once the jam clears');
+});
+
+test('paced toggling (1s apart) never jams', () => {
+  const m = createMatch(1, A);
+  for (let i = 0; i < 30; i++) { matchGuard(m, 'door', 'L'); stepMatch(m, 1); }
+  assert.equal(snapshot(m).jam.doorL, undefined, 'calm, spaced use should not jam');
 });
 
 test('snapshot is serializable and carries the anim + guard state', () => {

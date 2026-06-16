@@ -37,6 +37,13 @@ export const KILL_TIME = 5.0;     // seconds at the door before the strike lands
 export const TELEPORT_CD = 6.0;   // cooldown between teleports (longer)
 export const REPEL_CD = 9.0;      // a slammed door sends you back to the stage with a long cooldown
 
+// Anti-spam: toggling a single control (a door, a light, or the camera) SPAM_LIMIT times within
+// SPAM_WINDOW seconds jams THAT control for JAM_TIME seconds — so the guard has to stay calm and
+// can't machine-gun the doors/lights/cams. The counter resets the moment a jam fires.
+export const SPAM_LIMIT = 20;
+export const SPAM_WINDOW = 15;
+export const JAM_TIME = 15;
+
 function doorOf(node) { return node === 'DOOR_L' ? 'L' : node === 'DOOR_R' ? 'R' : null; }
 
 // assignments: [{ id, name, role }]. Exactly one 'guard'; the rest are animatronics.
@@ -58,6 +65,9 @@ export function createMatch(night, assignments) {
       clockMinutes: 0,
     },
     anims,
+    elapsed: 0,    // seconds since the match began (drives cooldowns + the spam window)
+    spam: {},      // per-control: { count, windowStart }
+    jamUntil: {},  // per-control: elapsed time the jam ends
     phase: 'playing',
     winner: null,
     killerName: null,
@@ -71,10 +81,28 @@ function repelSide(m, side) {
   }
 }
 
+// The control a guard input belongs to for spam/jam tracking (flashlight is exempt — it has its
+// own charge budget). Doors + lights are per-side; raising/switching the camera all count as 'cam'.
+function controlKey(kind, payload) {
+  if (kind === 'door') return 'door' + payload;
+  if (kind === 'light') return 'light' + payload;
+  if (kind === 'monitor' || kind === 'cam') return 'cam';
+  return null;
+}
+
 // Guard input: toggle a door/light, raise/lower the monitor, switch cam, toggle the flashlight.
+// A control that's currently jammed (over-spammed) ignores input until the jam clears.
 export function matchGuard(m, kind, payload) {
   if (m.phase !== 'playing') return;
   const s = m.state;
+  const key = controlKey(kind, payload);
+  if (key) {
+    if ((m.jamUntil[key] || 0) > m.elapsed) return; // jammed — input rejected
+    const sp = m.spam[key] || (m.spam[key] = { count: 0, windowStart: m.elapsed });
+    if (m.elapsed - sp.windowStart > SPAM_WINDOW) { sp.windowStart = m.elapsed; sp.count = 0; }
+    sp.count++;
+    if (sp.count >= SPAM_LIMIT) { m.jamUntil[key] = m.elapsed + JAM_TIME; sp.count = 0; sp.windowStart = m.elapsed; return; } // jam now, block this action
+  }
   if (kind === 'door') { const side = payload; s.doors[side] = !s.doors[side]; if (s.doors[side]) repelSide(m, side); }
   else if (kind === 'light') { const side = payload; s.lights[side] = !s.lights[side]; }
   else if (kind === 'monitor') { s.monitorUp = !!payload; if (!s.monitorUp) s.flashlight.on = false; }
@@ -110,6 +138,7 @@ export function matchKill(m, animId) {
 
 export function stepMatch(m, dt) {
   if (m.phase !== 'playing') return;
+  m.elapsed += dt;
   const s = m.state;
   recomputeUsage(s);
   const shutdown = drainPower(s, dt, { base: CONFIG.power.mpBasePerSec, perUnit: CONFIG.power.mpPerUnitPerSec });
@@ -138,10 +167,15 @@ export function snapshot(m) {
     const a = m.anims[name];
     anims[name] = { node: a.node, atDoor: a.atDoor, killTimer: +a.killTimer.toFixed(2), cooldown: +a.cooldown.toFixed(2) };
   }
+  const jam = {};
+  for (const key of ['doorL', 'doorR', 'lightL', 'lightR', 'cam']) {
+    const rem = (m.jamUntil[key] || 0) - m.elapsed;
+    if (rem > 0) jam[key] = +rem.toFixed(1);
+  }
   return {
     clockMinutes: s.clockMinutes, power: s.power, usageLoad: s.usageLoad,
     doors: { ...s.doors }, lights: { ...s.lights }, monitorUp: s.monitorUp, activeCam: s.activeCam,
     flashOn: s.flashlight.on, flashPct: s.flashlight.charge,
-    anims, phase: m.phase, winner: m.winner, killerName: m.killerName,
+    anims, jam, phase: m.phase, winner: m.winner, killerName: m.killerName,
   };
 }

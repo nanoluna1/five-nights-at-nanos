@@ -90,10 +90,14 @@ function showCheatToast(text) {
   clearTimeout(cheatToastTimer);
   cheatToastTimer = setTimeout(() => { cheatToastEl.style.display = 'none'; }, 2200);
 }
-function armCluckGif() {
+function setCluckGif() { // local effect only (used on trigger AND on receiving the network message)
   cheats.cluckGif = true;
   if (!cheats.cluckImg) { const img = new Image(); img.src = 'Cluck.gif'; cheats.cluckImg = img; }
-  showCheatToast('Cheat: Cluck is now 😭');
+}
+function armCluckGif() { // triggered locally -> apply here and tell everyone else
+  setCluckGif();
+  showCheatToast('Cheat: Cluck is now 😭 (everyone)');
+  if (mpNet) { if (mpNet.isHost) mpNet.broadcast({ type: 'cheat', cluck: true }); else mpNet.send({ type: 'cheat', cluck: true }); }
 }
 let cheatBuf = '';
 window.addEventListener('keydown', (e) => {
@@ -127,6 +131,8 @@ function hostGame(name) {
         mpDoSpin(id); // the host validates it's actually this client's turn
       } else if (msg.type === 'input' && mpGame) {
         mpGame.onMessage(id, msg); // a player's match input (guard toggle / teleport / kill)
+      } else if (msg.type === 'cheat' && msg.cluck) {
+        setCluckGif(); if (mpNet) mpNet.broadcast({ type: 'cheat', cluck: true }); // apply + fan out to all clients
       }
     },
     onLeave: (id) => {
@@ -151,6 +157,7 @@ function joinGame(code) {
       else if (msg.type === 'spinResult') mpHandleSpinResult(msg);
       else if (msg.type === 'rolesDone') mpHandleRolesDone(msg);
       else if (msg.type === 'startNight') beginMatch(msg.night, msg.assignments);
+      else if (msg.type === 'cheat' && msg.cluck) setCluckGif(); // host fanned out the Cluck cheat
       else if ((msg.type === 'snap' || msg.type === 'matchOver') && mpGame) mpGame.onMessage('HOST', msg);
     },
     onClose: () => mp.setStatus('Host disconnected'),

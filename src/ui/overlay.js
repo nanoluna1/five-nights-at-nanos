@@ -85,6 +85,10 @@ export function createOverlay(rootEl, handlers) {
     'A/D door  ·  Q/E light  ·  F flashlight  ·  C cameras  ·  move mouse to look');
   hud.appendChild(hint);
 
+  // jam banner (multiplayer): a control that's been spammed too hard locks up for a bit
+  const jamBanner = el('div', 'position:absolute;top:42px;left:50%;transform:translateX(-50%);font-size:14px;letter-spacing:1px;color:#e8b23a;background:rgba(40,22,0,0.9);border:1px solid #e8b23a;padding:6px 14px;border-radius:6px;display:none;');
+  hud.appendChild(jamBanner);
+
   // pull-up / lower button (bottom-center)
   const camBtn = el('div', 'position:absolute;bottom:14px;left:50%;transform:translateX(-50%);pointer-events:auto;cursor:pointer;' +
     'padding:9px 26px;background:#17161b;border:1px solid #34333c;color:#cfcabb;font-size:15px;letter-spacing:1px;', '▲  PULL UP CAMERAS / LOWER');
@@ -209,12 +213,21 @@ export function createOverlay(rootEl, handlers) {
       const camName = (!d.monitorUp || !d.camLabel || d.camLabel === '—') ? '—' : d.camLabel.replace('CAM', '');
       camLabel.textContent = 'CAM ' + camName + '  •  SIGNAL…';
       hud.style.opacity = d.powerPct < 25 ? (0.78 + Math.random() * 0.22).toFixed(2) : '1';
-      // door/light button active states
-      const dl = d.doors || {}, lt = d.lights || {};
-      ctlL.door.style.background = dl.L ? '#5a1e1e' : '#15151a'; ctlL.door.style.borderColor = dl.L ? '#e24b4a' : '#34333c';
-      ctlR.door.style.background = dl.R ? '#5a1e1e' : '#15151a'; ctlR.door.style.borderColor = dl.R ? '#e24b4a' : '#34333c';
-      ctlL.light.style.background = lt.L ? '#5a4a1a' : '#15151a'; ctlL.light.style.borderColor = lt.L ? '#e8b23a' : '#34333c';
-      ctlR.light.style.background = lt.R ? '#5a4a1a' : '#15151a'; ctlR.light.style.borderColor = lt.R ? '#e8b23a' : '#34333c';
+      // door/light button active states (and the multiplayer jam overlay)
+      const dl = d.doors || {}, lt = d.lights || {}, jam = d.jam || {};
+      const setCtl = (btn, jammed, active, activeBg, activeBorder, label) => {
+        if (jammed) { btn.style.background = '#2a1c06'; btn.style.borderColor = '#e8b23a'; btn.style.color = '#e8b23a'; btn.textContent = 'JAMMED ' + Math.ceil(jammed) + 's'; }
+        else { btn.style.background = active ? activeBg : '#15151a'; btn.style.borderColor = active ? activeBorder : '#34333c'; btn.style.color = '#cfcabb'; btn.textContent = label; }
+      };
+      setCtl(ctlL.door, jam.doorL, dl.L, '#5a1e1e', '#e24b4a', 'DOOR');
+      setCtl(ctlR.door, jam.doorR, dl.R, '#5a1e1e', '#e24b4a', 'DOOR');
+      setCtl(ctlL.light, jam.lightL, lt.L, '#5a4a1a', '#e8b23a', 'LIGHT');
+      setCtl(ctlR.light, jam.lightR, lt.R, '#5a4a1a', '#e8b23a', 'LIGHT');
+      const NAMES = { doorL: 'Door L', doorR: 'Door R', lightL: 'Light L', lightR: 'Light R', cam: 'Cameras' };
+      const jamParts = [];
+      for (const k of ['doorL', 'doorR', 'lightL', 'lightR', 'cam']) if (jam[k]) jamParts.push(NAMES[k] + ' ' + Math.ceil(jam[k]) + 's');
+      if (jamParts.length) { jamBanner.style.display = 'block'; jamBanner.textContent = '⚠ JAMMED — ' + jamParts.join('  ·  ') + '   (ease up!)'; }
+      else jamBanner.style.display = 'none';
       mapWrap.style.display = d.monitorUp ? 'block' : 'none';
       hint.style.display = d.monitorUp ? 'none' : 'block';
       if (d.monitorUp) for (const id in camBtns) { const c = camBtns[id]; if (c.active) c.node.style.background = (id === d.activeCam) ? 'rgba(58,109,122,0.45)' : 'transparent'; }
