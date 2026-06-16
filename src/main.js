@@ -12,7 +12,7 @@ import { createWorld } from './render/world.js';
 import { createOverlay } from './ui/overlay.js';
 import { createMpMenu } from './ui/mpmenu.js';
 import { createAnimHud } from './ui/animhud.js';
-import { makeRoomCode, createLobby, ROLES, pickSpinRole } from './lobby.js';
+import { makeRoomCode, createLobby, ROLES, planRoles } from './lobby.js';
 import { createPeerHost, createPeerClient } from './net.js';
 import { createMpGame } from './mpgame.js';
 
@@ -163,13 +163,15 @@ function joinGame(code) {
 function startMpGame() {
   if (!mpNet || !mpNet.isHost || !mpLobby || mpLobby.count() < 2) return;
   const players = mpLobby.players();
+  const rng = makeRng((Date.now() ^ 0x5bd1e995) >>> 0);
+  // Guard is chosen uniformly at random up front (or pinned to the host if the cheat is armed).
+  const planned = planRoles(players.map(p => p.id), rng, cheatHostGuard ? 'HOST' : null);
   spinState = {
     order: players.map(p => ({ id: p.id, name: p.name })),
     remaining: ROLES.slice(),
-    guardAssigned: false,
     assigned: [],
     turnIdx: 0,
-    rng: makeRng((Date.now() ^ 0x5bd1e995) >>> 0),
+    planned,
   };
   mpNextTurn();
 }
@@ -187,18 +189,14 @@ function mpDoSpin(byId) {
   if (!spinState) return;
   const active = spinState.order[spinState.turnIdx];
   if (!active || active.id !== byId) return; // only the player whose turn it is can spin
-  const playersLeft = spinState.order.length - spinState.turnIdx;
-  // CHEAT: force the host onto Guard when armed (host spins first, so guard is still available).
-  const role = (cheatHostGuard && active.id === 'HOST' && spinState.remaining.includes('guard'))
-    ? 'guard'
-    : pickSpinRole(spinState.remaining, spinState.guardAssigned, playersLeft, spinState.rng);
+  const role = spinState.planned[active.id]; // role was decided fairly up front (see startMpGame)
   const durationMs = 3400;
   const res = { type: 'spinResult', activeId: active.id, activeName: active.name, role, durationMs };
   mpNet.broadcast(res);
   mpHandleSpinResult(res);
   // commit to authoritative state, then advance after the animation settles
-  spinState.remaining.splice(spinState.remaining.indexOf(role), 1);
-  if (role === 'guard') spinState.guardAssigned = true;
+  const idx = spinState.remaining.indexOf(role);
+  if (idx >= 0) spinState.remaining.splice(idx, 1);
   spinState.assigned.push({ id: active.id, name: active.name, role });
   spinState.turnIdx++;
   setTimeout(mpNextTurn, durationMs + 1500);

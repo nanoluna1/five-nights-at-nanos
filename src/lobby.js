@@ -4,18 +4,21 @@
 export const MAX_PLAYERS = 5; // Guard + Har + Gi + Cluck + Arg
 export const ROLES = ['guard', 'har', 'gi', 'cluck', 'arg'];
 
-// The role a spin lands on for the current player, enforcing EXACTLY ONE Guard across the game.
-//   remaining     — roles still on the wheel (the landed role is removed by the caller after).
-//   guardAssigned — has any earlier spin already taken Guard.
-//   playersLeft   — players still needing a role, INCLUDING the current one.
-//   rand          — () => [0,1); injectable for tests.
-// Guarantees: >=1 Guard (the last player is forced to Guard if nobody has it yet) and <=1 Guard
-// (Guard is excluded from the draw once taken). Fewer than 5 players => the unspun roles are left
-// out, but a Guard is always among the assigned roles.
-export function pickSpinRole(remaining, guardAssigned, playersLeft, rand = Math.random) {
-  if (!guardAssigned && playersLeft <= 1) return 'guard';
-  const pool = guardAssigned ? remaining.filter(r => r !== 'guard') : remaining.slice();
-  return pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))];
+// Decide everyone's role UP FRONT so the Guard is uniformly random among ALL players — no "the last
+// spinner becomes Guard" bias. The wheel just animates each player to their planned role. Exactly
+// one Guard; the rest get distinct animatronics. `forceGuardId` (optional) pins a player to Guard
+// (used by the host cheat). `ids` is the list of player ids; `rand` -> [0,1), injectable for tests.
+export function planRoles(ids, rand = Math.random, forceGuardId = null) {
+  const players = ids.slice();
+  let guardId;
+  if (forceGuardId && players.includes(forceGuardId)) guardId = forceGuardId;
+  else guardId = players[Math.min(players.length - 1, Math.floor(rand() * players.length))];
+  const anims = ROLES.slice(1); // ['har','gi','cluck','arg']
+  for (let i = anims.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); const t = anims[i]; anims[i] = anims[j]; anims[j] = t; }
+  const map = {};
+  let ai = 0;
+  for (const id of players) map[id] = (id === guardId) ? 'guard' : anims[ai++];
+  return map;
 }
 
 const CODE_A = ['nano', 'dusk', 'rust', 'gloom', 'hollow', 'murk', 'vex', 'grim', 'ash', 'fog'];
