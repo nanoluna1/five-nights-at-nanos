@@ -427,20 +427,33 @@ export function drawOfficeBackdrop(ctx, W, H, sceneW, fanAngle) {
     ctx.restore();
 }
 
-export function drawDoorway(ctx, x, top, w, h, closedAmt) {
+export function drawDoorway(ctx, x, top, w, h, closedAmt, lit) {
     ctx.save();
     // Doorway frame
     ctx.fillStyle = '#181818';
     ctx.fillRect(x - 25, top - 25, w + 50, h + 25); // Outer frame
-    ctx.fillStyle = '#050505';
-    ctx.fillRect(x, top, w, h); // Inner dark hallway
 
-    // Inner shadow/depth
-    const hallGrad = ctx.createLinearGradient(x, top, x, top + h);
-    hallGrad.addColorStop(0, '#000');
-    hallGrad.addColorStop(1, '#080808');
-    ctx.fillStyle = hallGrad;
-    ctx.fillRect(x, top, w, h);
+    // Inner hallway. Flicking the door light spills into the corridor (dim lit hallway, matching
+    // the window glass); otherwise it stays near-black. The blast door, drawn below, covers this
+    // when shut — a closed door blocks the light, which is correct.
+    if (lit) {
+        const hallGrad = ctx.createLinearGradient(x, top, x, top + h);
+        hallGrad.addColorStop(0, '#0c0f0c');
+        hallGrad.addColorStop(0.5, '#28321f');
+        hallGrad.addColorStop(1, '#0a0d0a');
+        ctx.fillStyle = hallGrad;
+        ctx.fillRect(x, top, w, h);
+        ctx.fillStyle = 'rgba(150,190,120,0.07)'; // faint floor light spill
+        ctx.fillRect(x, top + h * 0.5, w, h * 0.5);
+    } else {
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(x, top, w, h); // Inner dark hallway
+        const hallGrad = ctx.createLinearGradient(x, top, x, top + h);
+        hallGrad.addColorStop(0, '#000');
+        hallGrad.addColorStop(1, '#080808');
+        ctx.fillStyle = hallGrad;
+        ctx.fillRect(x, top, w, h);
+    }
 
     // Blast door
     const doorH = h * Math.max(0, Math.min(1, closedAmt));

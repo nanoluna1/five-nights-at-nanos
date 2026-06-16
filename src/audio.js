@@ -139,28 +139,35 @@ export function createAudio() {
     }
   }
 
-  // Power-out sequence: everything dies -> held silence -> a longer, dread-building original
-  // music-box cue. Timing comes from CONFIG.powerout so feel is tunable. Resolves when the
-  // music box finishes, so main.js can do the face-flicker beat and then the final scare.
+  // Power-out music: everything dies, then a tinny music-box march plays in the dark (the
+  // original-game power-out cue — Toreador-style) and fades out at the end. Resolves when the
+  // march finishes, so main.js can hold the dead-silent dread beat and then fire the strike.
   function powerOutSequence(timing) {
     const T = timing || {};
-    const dieMs = T.dieMs ?? 700, silenceMs = T.silenceMs ?? 1800, musicBoxMs = T.musicBoxMs ?? 6500;
+    const dieMs = T.dieMs ?? 600, songMs = T.songMs ?? 4500;
     const a = loops.get('ambient');
     if (a) a.g.gain.linearRampToValueAtTime(0, ctx.currentTime + dieMs / 1000); // everything dies
     return new Promise(resolve => {
       setTimeout(() => {
         const t = ctx.currentTime;
-        const notes = [659, 784, 880, 988, 784, 659, 587, 659, 523]; // slow, music-box-like lullaby gone wrong
-        const step = (musicBoxMs / 1000) / notes.length;
-        notes.forEach((f, i) => {
+        // march phrase, grouped in the "dum dum da dum dum" cadence; the tail fades out
+        const melody = [392, 523, 659, 523, 392,  523, 659, 784, 659,  587, 698, 587,
+                        523, 659, 523, 440, 392,  349, 392, 440, 523, 392];
+        const n = melody.length;
+        const step = (songMs / 1000) / n;
+        melody.forEach((f, i) => {
+          const st = t + i * step;
+          const fade = i < n * 0.6 ? 1 : Math.max(0.04, 1 - (i - n * 0.6) / (n * 0.4)); // fade last 40%
+          const accent = (i % 5 === 0) ? 1.2 : 1;                                        // lean on group starts
           const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
-          const g = ctx.createGain(); const st = t + i * step;
-          g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(0.3, st + 0.03);
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0.0001, st);
+          g.gain.exponentialRampToValueAtTime(Math.max(0.001, 0.32 * fade * accent), st + 0.02);
           g.gain.exponentialRampToValueAtTime(0.0001, st + step * 0.92);
           o.connect(g).connect(buses.music); o.start(st); o.stop(st + step);
         });
-        setTimeout(resolve, musicBoxMs);
-      }, dieMs + silenceMs); // hold silence after the lights die before the box starts
+        setTimeout(resolve, songMs);
+      }, dieMs); // the march starts as soon as the lights die
     });
   }
 

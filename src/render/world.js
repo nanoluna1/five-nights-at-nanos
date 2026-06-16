@@ -20,7 +20,7 @@ export function createWorld(mountEl) {
   canvas.addEventListener('pointermove', (e) => { panTarget = Math.max(0, Math.min(1, e.clientX / window.innerWidth)); });
 
   let staticTimer = 0, shakeAmt = 0, dim = 1, jumpT = 0, jumpResolve = null, jumpName = 'har';
-  let lurkFace = null;           // creature name shown flickering during the power-out dread beat
+  let powerEyes = false;         // Har's eyes pulsing on the left door during the power-out dread beat
   let fanAngle = 0;
   const doorAnim = { L: 0, R: 0 };
 
@@ -60,9 +60,10 @@ export function createWorld(mountEl) {
     const lurk = lit_creature(state, side);
     if (lit && lurk) { ctx.save(); ctx.beginPath(); ctx.rect(winX + 12, top + 12, wW - 24, wH - 24); ctx.clip(); DRAW[lurk](winX + wW / 2, top + wH * 0.62, 0.8, 1.3); ctx.restore(); }
 
-    // doorway + sliding blast-door — agy art; closedAmt drives the slide (eased from state)
+    // doorway + sliding blast-door — agy art; closedAmt drives the slide (eased from state).
+    // The light also spills down the corridor through the open door (not just the window).
     const closedAmt = (doorAnim[side] += ((state.doors[side] ? 1 : 0) - doorAnim[side]) * 0.4);
-    drawDoorway(ctx, doorX, top, 200, hgt, closedAmt);
+    drawDoorway(ctx, doorX, top, 200, hgt, closedAmt, lit);
     // the light ALSO reveals a creature standing in the doorway (in the part still open
     // below the descending door) — so a light-check covers both the window and the door.
     if (lit && lurk && closedAmt < 0.85) {
@@ -125,10 +126,10 @@ export function createWorld(mountEl) {
     if (shakeAmt > 0.002) { ox = (Math.random() - 0.5) * shakeAmt * 60; oy = (Math.random() - 0.5) * shakeAmt * 60; shakeAmt *= 0.86; }
     ctx.save(); ctx.translate(ox, oy);
 
-    const monitorUp = !jumpResolve && !lurkFace && !!state.monitorUp;
+    const monitorUp = !jumpResolve && !powerEyes && !!state.monitorUp;
     if (monitorUp) drawCamera(state); else drawOffice(state);
 
-    if (!monitorUp && !lurkFace && !jumpResolve) {
+    if (!monitorUp && !powerEyes && !jumpResolve) {
       // office darkness scales with power; flashlight is a CAMERA tool now (handled in drawCamera)
       const darkness = (1 - dim) * 0.8 + 0.1;
       ctx.fillStyle = `rgba(2,3,6,${darkness})`; ctx.fillRect(-ox, -oy, W, H);
@@ -136,10 +137,28 @@ export function createWorld(mountEl) {
 
     if (staticTimer > 0) { staticTimer -= dt; drawStatic(Math.min(0.8, staticTimer * 2.2)); }
 
-    // power-out dread: the headliner's face stutters out of the black before the strike
-    if (lurkFace) {
+    // power-out dread: Har waits at the LEFT door, his eyes glowing → unglowing → glowing in the
+    // dark (riding a slow sine with a fine shimmer) while the music-box march plays, then silence.
+    if (powerEyes) {
       ctx.fillStyle = '#000'; ctx.fillRect(-ox, -oy, W, H);
-      if (Math.random() > 0.35) { const s = Math.min(W, H) / 260; DRAW[lurkFace](W / 2 + (Math.random() - 0.5) * 16, H * 0.5, s, 1.5); }
+      const tt = performance.now() / 1000;
+      const pulse = Math.pow(0.5 + 0.5 * Math.sin(tt * 3.0), 1.4); // glow / unglow / glow
+      const flick = 0.75 + 0.25 * Math.sin(tt * 13);               // fine flicker
+      const a = (0.10 + pulse * 0.9) * flick;
+      const lx = W * 0.17, eyY = H * 0.46, sep = W * 0.022, r = Math.min(W, H) * 0.055;
+      // a looming shadow filling the left doorway
+      const sg = ctx.createRadialGradient(lx, H * 0.55, 10, lx, H * 0.55, H * 0.42);
+      sg.addColorStop(0, 'rgba(12,9,7,0.9)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg; ctx.fillRect(0, 0, W * 0.46, H);
+      for (const dx of [-sep, sep]) {
+        const ex = lx + dx;
+        const grd = ctx.createRadialGradient(ex, eyY, 0, ex, eyY, r);
+        grd.addColorStop(0, `rgba(255,210,110,${a})`);
+        grd.addColorStop(0.35, `rgba(255,150,25,${a * 0.55})`);
+        grd.addColorStop(1, 'rgba(255,80,0,0)');
+        ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(ex, eyY, r, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = `rgba(255,245,210,${a})`; ctx.beginPath(); ctx.arc(ex, eyY, r * 0.13, 0, Math.PI * 2); ctx.fill();
+      }
     }
 
     if (jumpResolve) {
@@ -160,8 +179,8 @@ export function createWorld(mountEl) {
     setDoor() {}, setLight() {}, setFlashlight() {},
     staticBurst() { staticTimer = 0.4; },
     shake(intensity) { shakeAmt = Math.max(shakeAmt, intensity); },
-    showLurkFace(name) { lurkFace = name; },         // power-out dread beat
-    clearLurkFace() { lurkFace = null; },
+    showPowerOutEyes() { powerEyes = true; },        // power-out dread beat (Har's eyes, left door)
+    clearPowerOutEyes() { powerEyes = false; },
     playJumpscare(name) { return new Promise((resolve) => { jumpName = name || 'har'; jumpT = 0; jumpResolve = resolve; shakeAmt = 1.3; }); },
     dimForPower(level) { dim = level; },
   };

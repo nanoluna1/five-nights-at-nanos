@@ -155,19 +155,20 @@ async function runScare(name) {
   setTimeout(gotoMenu, 1800);
 }
 
-// Power-out: lights die -> dark -> held silence + music box -> Har's face stutters out of the
-// black -> the strike. Timing is CONFIG.powerout so the dread can be tuned.
+// Power-out: lights die -> a tinny music-box march plays in the dark with Har's eyes pulsing on
+// the LEFT door -> the march fades -> dead silence -> the strike fires the instant the silence
+// ends, in lockstep with its sound. Timing is CONFIG.powerout so the dread can be tuned.
 async function runPowerOut() {
   scareRunning = true;
   state.phase = 'powerout';
   state.doors.L = state.doors.R = false; state.lights.L = state.lights.R = false;
   state.flashlight.on = false; setMonitor(state, false);
   world.dimForPower(0);
-  await audio.powerOutSequence(CONFIG.powerout);   // die -> silence -> music box
-  world.showLurkFace('har');                       // face flickers in the dark
-  await new Promise(r => setTimeout(r, CONFIG.powerout.faceFlickerMs));
-  world.clearLurkFace();
-  audio.oneShot('jumpscare');
+  world.showPowerOutEyes();                              // Har looms at the left door, eyes glowing
+  await audio.powerOutSequence(CONFIG.powerout);         // lights die -> music-box march -> fade out
+  await new Promise(r => setTimeout(r, CONFIG.powerout.quietMs)); // dead silence (eyes still pulsing)
+  world.clearPowerOutEyes();
+  audio.oneShot('jumpscare');                            // sound + visual together, no delay
   await world.playJumpscare('har');
   overlay.showGameOver();
   setTimeout(gotoMenu, 1800);
