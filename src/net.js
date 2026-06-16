@@ -64,18 +64,33 @@ export async function createPeerHost(code, hooks = {}) {
   const Peer = await loadPeerJS();
   const peer = new Peer(code); // the room code is our peer id
   const conns = new Map();
-  peer.on('open', () => hooks.onReady && hooks.onReady(code));
-  peer.on('error', (e) => hooks.onError && hooks.onError(e && e.type ? e.type : String(e)));
+  let opened = false, closed = false;
+  // The public PeerJS broker drops idle peers after a few minutes — which would make the room code
+  // go dead so NEW friends can't join (already-connected players keep working). Reconnecting on
+  // disconnect + a periodic safety check keeps the host REGISTERED so the code stays valid all
+  // session; the ping also keeps the open data channels from idling out while waiting in the lobby.
+  const reconnect = () => { if (closed) return; try { if (peer.disconnected && !peer.destroyed) peer.reconnect(); } catch (e) {} };
+  const keepAlive = setInterval(() => {
+    reconnect();
+    for (const c of conns.values()) { try { c.send({ type: '__ping' }); } catch (e) {} }
+  }, 15000);
+  peer.on('open', () => { opened = true; hooks.onReady && hooks.onReady(code); });
+  peer.on('disconnected', reconnect);
+  peer.on('error', (e) => {
+    const t = e && e.type ? e.type : String(e);
+    if (opened && (t === 'network' || t === 'disconnected')) reconnect(); // lost the broker — re-register
+    else hooks.onError && hooks.onError(t);                                // a real failure (e.g. can't open)
+  });
   peer.on('connection', (conn) => {
     conn.on('open', () => { conns.set(conn.peer, conn); hooks.onJoin && hooks.onJoin(conn.peer); });
-    conn.on('data', (msg) => hooks.onMessage && hooks.onMessage(conn.peer, msg));
+    conn.on('data', (msg) => { if (msg && msg.type === '__ping') return; hooks.onMessage && hooks.onMessage(conn.peer, msg); });
     conn.on('close', () => { if (conns.delete(conn.peer)) hooks.onLeave && hooks.onLeave(conn.peer); });
   });
   return {
     isHost: true,
     broadcast(msg) { for (const c of conns.values()) c.send(msg); },
     sendTo(id, msg) { const c = conns.get(id); if (c) c.send(msg); },
-    close() { for (const c of conns.values()) c.close(); peer.destroy(); },
+    close() { closed = true; clearInterval(keepAlive); for (const c of conns.values()) c.close(); peer.destroy(); },
   };
 }
 
@@ -89,11 +104,17 @@ export async function createPeerClient(code, hooks = {}) {
       conn.on('open', () => {
         settled = true;
         hooks.onReady && hooks.onReady();
-        resolve({ id: peer.id, send: (m) => conn.send(m), close: () => { conn.close(); peer.destroy(); } });
+        resolve({ id: peer.id, send: (m) => conn.send(m), close: () => { try { conn.close(); peer.destroy(); } catch (e) {} } });
       });
-      conn.on('data', (msg) => hooks.onMessage && hooks.onMessage(msg));
+      conn.on('data', (msg) => { if (msg && msg.type === '__ping') return; hooks.onMessage && hooks.onMessage(msg); });
       conn.on('close', () => hooks.onClose && hooks.onClose());
     });
-    peer.on('error', (e) => { hooks.onError && hooks.onError(e && e.type ? e.type : String(e)); if (!settled) resolve(null); });
+    peer.on('disconnected', () => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} });
+    peer.on('error', (e) => {
+      const t = e && e.type ? e.type : String(e);
+      if (settled && (t === 'network' || t === 'disconnected')) { try { if (!peer.destroyed) peer.reconnect(); } catch (e2) {} return; }
+      hooks.onError && hooks.onError(t);
+      if (!settled) resolve(null);
+    });
   });
 }
