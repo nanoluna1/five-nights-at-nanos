@@ -3,6 +3,11 @@
 //  - lobby: room code (top-centre), live player list (left), Start (bottom-right, host only)
 //  - join:  room-code entry
 // The caller wires the hooks to net.js / lobby.js.
+import { createSpinWheel } from './spinwheel.js';
+
+const ROLECOL = { guard: '#6fae7e', har: '#8d6e63', gi: '#3a5f5f', cluck: '#d4af37', arg: '#3a602c' };
+const ROLEUP = (r) => ({ guard: 'Guard', har: 'Har', gi: 'Gi', cluck: 'Cluck', arg: 'Arg' }[r] || String(r || '').toUpperCase());
+
 export function createMpMenu(rootEl, hooks = {}) {
   const h = hooks;
   const el = (tag, css, txt) => { const n = document.createElement(tag); if (css) n.style.cssText = css; if (txt != null) n.textContent = txt; return n; };
@@ -80,11 +85,56 @@ export function createMpMenu(rootEl, hooks = {}) {
   backJoin.onclick = () => h.onBack && h.onBack(); join.appendChild(backJoin);
   root.appendChild(join);
 
+  // ===== SPIN (role wheel) =====
+  const spin = el('div', 'position:absolute;inset:0;display:none;');
+  const spinHdr = el('div', 'position:absolute;top:38px;left:50%;transform:translateX(-50%);text-align:center;');
+  const turnName = el('div', 'font-size:34px;font-weight:bold;color:#e8b23a;', '—');
+  spinHdr.appendChild(turnName);
+  spinHdr.appendChild(el('div', 'font-size:13px;letter-spacing:3px;color:#8a8a90;margin-top:2px;', 'SPIN FOR YOUR ROLE'));
+  spin.appendChild(spinHdr);
+  const wheelWrap = el('div', 'position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);width:440px;height:440px;');
+  const wheelCanvas = el('canvas'); wheelCanvas.width = 440; wheelCanvas.height = 440; wheelCanvas.style.cssText = 'display:block;';
+  wheelWrap.appendChild(wheelCanvas);
+  const spinBtn = el('div', 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:92px;height:92px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:bold;letter-spacing:1px;border:2px solid #34333c;background:#15151a;color:#cfcabb;cursor:pointer;user-select:none;', 'SPIN');
+  spinBtn.onclick = () => { if (!spinBtn._disabled && h.onSpinPressed) h.onSpinPressed(); };
+  wheelWrap.appendChild(spinBtn);
+  spin.appendChild(wheelWrap);
+  const assignedWrap = el('div', 'position:absolute;right:6%;top:55%;transform:translateY(-50%);width:230px;');
+  assignedWrap.appendChild(el('div', 'font-size:13px;letter-spacing:2px;color:#8a8a90;margin-bottom:8px;', 'ASSIGNED'));
+  const assignedList = el('div', ''); assignedWrap.appendChild(assignedList);
+  spin.appendChild(assignedWrap);
+  root.appendChild(spin);
+  const wheel = createSpinWheel(wheelCanvas);
+
+  // ===== ROLE REVEAL =====
+  const reveal = el('div', 'position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;');
+  reveal.appendChild(el('div', 'font-size:16px;letter-spacing:4px;color:#8a8a90;', 'YOU ARE'));
+  const revealRole = el('div', 'font-size:72px;font-weight:bold;letter-spacing:3px;color:#e8b23a;margin:10px 0;', '—');
+  reveal.appendChild(revealRole);
+  const revealSub = el('div', 'font-size:18px;color:#cfcabb;text-align:center;max-width:560px;', '');
+  reveal.appendChild(revealSub);
+  const revealList = el('div', 'margin-top:26px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-width:680px;');
+  reveal.appendChild(revealList);
+  const revealNote = el('div', 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);font-size:14px;color:#6fae7e;', '');
+  reveal.appendChild(revealNote);
+  root.appendChild(reveal);
+
   function showScreen(which) {
     root.style.display = 'block';
     home.style.display = which === 'home' ? 'flex' : 'none';
     lobby.style.display = which === 'lobby' ? 'block' : 'none';
     join.style.display = which === 'join' ? 'flex' : 'none';
+    spin.style.display = which === 'spin' ? 'block' : 'none';
+    reveal.style.display = which === 'reveal' ? 'flex' : 'none';
+  }
+  function renderAssigned(list) {
+    assignedList.innerHTML = '';
+    (list || []).forEach((a) => {
+      const row = el('div', 'display:flex;align-items:center;gap:8px;padding:6px 9px;margin-bottom:6px;border:1px solid #2a2a30;background:rgba(20,20,26,0.6);font-size:15px;color:#e6e2d6;');
+      row.appendChild(el('div', `width:9px;height:9px;border-radius:50%;background:${ROLECOL[a.role] || '#888'};`));
+      row.appendChild(el('div', '', `${a.name} — ${ROLEUP(a.role)}`));
+      assignedList.appendChild(row);
+    });
   }
   function renderRoster(players, opts) {
     const o = opts || {}; listEl.innerHTML = '';
@@ -108,6 +158,30 @@ export function createMpMenu(rootEl, hooks = {}) {
     showJoinEntry() { showScreen('join'); joinStatus.textContent = ''; codeInput.focus(); },
     showHostLobby(code) { showScreen('lobby'); codeText.textContent = code; },
     setRoster(players, opts) { renderRoster(players, opts); },
+    // ---- spin wheel ----
+    showSpin() { showScreen('spin'); },
+    setWheelRoles(roles) { wheel.setRoles(roles); },
+    setTurn(name, isMine) {
+      turnName.textContent = (name || '—') + "'s Turn";
+      spinBtn._disabled = !isMine;
+      spinBtn.style.opacity = isMine ? '1' : '0.35';
+      spinBtn.style.cursor = isMine ? 'pointer' : 'default';
+      spinBtn.style.borderColor = isMine ? '#e8b23a' : '#34333c';
+      spinBtn.textContent = isMine ? 'SPIN' : '…';
+    },
+    spinResult(role, ms, cb) { spinBtn._disabled = true; spinBtn.style.opacity = '0.35'; spinBtn.textContent = '…'; wheel.spinTo(role, ms, cb); },
+    setAssigned(list) { renderAssigned(list); },
+    showRoleReveal(myRole, assignments) {
+      showScreen('reveal');
+      revealRole.textContent = myRole ? ROLEUP(myRole) : 'SPECTATOR';
+      revealRole.style.color = ROLECOL[myRole] || '#e8b23a';
+      revealSub.textContent = myRole === 'guard'
+        ? 'Watch the doors, the cameras, and the power. Survive until 6 AM.'
+        : (myRole ? 'Teleport the cameras toward the office and break in before 6 AM.' : 'No role this round — sit back and watch.');
+      revealList.innerHTML = '';
+      (assignments || []).forEach((a) => revealList.appendChild(el('div', `padding:6px 12px;border:1px solid ${ROLECOL[a.role] || '#2a2a30'};border-radius:6px;font-size:14px;color:#e6e2d6;`, `${a.name}: ${ROLEUP(a.role)}`)));
+      revealNote.textContent = 'The night begins…  (live match coming in the next update)';
+    },
     setStatus(text) { statusEl.textContent = text || ''; },
     setJoinStatus(text) { joinStatus.textContent = text || ''; },
     nameValue() { return nameInput.value; },

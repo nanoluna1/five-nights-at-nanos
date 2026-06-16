@@ -2,6 +2,21 @@
 // no network here — the host owns a Lobby and broadcasts roster snapshots; clients just render what
 // they receive. Kept pure so it is unit-tested (tests/lobby.test.js).
 export const MAX_PLAYERS = 5; // Guard + Har + Gi + Cluck + Arg
+export const ROLES = ['guard', 'har', 'gi', 'cluck', 'arg'];
+
+// The role a spin lands on for the current player, enforcing EXACTLY ONE Guard across the game.
+//   remaining     — roles still on the wheel (the landed role is removed by the caller after).
+//   guardAssigned — has any earlier spin already taken Guard.
+//   playersLeft   — players still needing a role, INCLUDING the current one.
+//   rand          — () => [0,1); injectable for tests.
+// Guarantees: >=1 Guard (the last player is forced to Guard if nobody has it yet) and <=1 Guard
+// (Guard is excluded from the draw once taken). Fewer than 5 players => the unspun roles are left
+// out, but a Guard is always among the assigned roles.
+export function pickSpinRole(remaining, guardAssigned, playersLeft, rand = Math.random) {
+  if (!guardAssigned && playersLeft <= 1) return 'guard';
+  const pool = guardAssigned ? remaining.filter(r => r !== 'guard') : remaining.slice();
+  return pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))];
+}
 
 const CODE_A = ['nano', 'dusk', 'rust', 'gloom', 'hollow', 'murk', 'vex', 'grim', 'ash', 'fog'];
 const CODE_B = ['glaze', 'spire', 'hush', 'crawl', 'snarl', 'rictus', 'vault', 'creak', 'shade', 'maw'];

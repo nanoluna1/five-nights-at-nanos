@@ -11,7 +11,7 @@ import { createAudio } from './audio.js';
 import { createWorld } from './render/world.js';
 import { createOverlay } from './ui/overlay.js';
 import { createMpMenu } from './ui/mpmenu.js';
-import { makeRoomCode, createLobby } from './lobby.js';
+import { makeRoomCode, createLobby, ROLES, pickSpinRole } from './lobby.js';
 import { createPeerHost, createPeerClient } from './net.js';
 
 const app = document.getElementById('app');
@@ -57,9 +57,12 @@ const mp = createMpMenu(app, {
   onJoin: (name) => { myName = (name || '').trim() || 'Nano'; mp.showJoinEntry(); },
   onSubmitCode: (code) => joinGame(code),
   onStart: () => startMpGame(),
+  onSpinPressed: () => onSpinPressed(),
 });
 
-function teardownMp() { if (mpNet) { try { mpNet.close(); } catch (e) {} } mpNet = null; mpLobby = null; }
+let spinState = null; // host-only: { order, remaining, guardAssigned, assigned, turnIdx, rng }
+function myMpId() { return mpNet && mpNet.isHost ? 'HOST' : (mpNet ? mpNet.id : null); }
+function teardownMp() { if (mpNet) { try { mpNet.close(); } catch (e) {} } mpNet = null; mpLobby = null; spinState = null; }
 
 function hostGame(name) {
   myName = (name || '').trim() || 'Nano';
@@ -73,10 +76,13 @@ function hostGame(name) {
     onReady: () => mp.setStatus('Room open — share the code and wait for players'),
     onError: (e) => mp.setStatus('Could not open room (' + e + '). Are you offline?'),
     onMessage: (id, msg) => {
-      if (msg && msg.type === 'hello') {
+      if (!msg) return;
+      if (msg.type === 'hello') {
         mpLobby.add(id, msg.name);
         if (mpNet) mpNet.broadcast({ type: 'roster', players: mpLobby.players() });
         mp.setRoster(mpLobby.players(), { isHost: true });
+      } else if (msg.type === 'spinPressed') {
+        mpDoSpin(id); // the host validates it's actually this client's turn
       }
     },
     onLeave: (id) => {
@@ -97,9 +103,9 @@ function joinGame(code) {
         mp.showHostLobby(code);
         mp.setRoster(msg.players, { isHost: false });
         mp.setStatus('In the lobby — waiting for the host to start');
-      } else if (msg.type === 'start') {
-        mp.setStatus('Roles spinning… (coming in the next update)');
-      }
+      } else if (msg.type === 'turn') mpHandleTurn(msg);
+      else if (msg.type === 'spinResult') mpHandleSpinResult(msg);
+      else if (msg.type === 'rolesDone') mpHandleRolesDone(msg);
     },
     onClose: () => mp.setStatus('Host disconnected'),
     onError: (e) => mp.setJoinStatus('Could not connect (' + e + ')'),
@@ -111,10 +117,77 @@ function joinGame(code) {
   });
 }
 
+// ---- Slice 2: the role spin wheel (host-authoritative) ----
+// The host owns spinState, decides each landed role (forced-Guard rule), and broadcasts turns +
+// results; every client animates the same wheel to the same role so it stays in sync.
 function startMpGame() {
-  if (!mpNet || !mpNet.isHost) return;
-  mpNet.broadcast({ type: 'start' });
-  mp.setStatus('Roles spinning… (coming in the next update)'); // Slice 2
+  if (!mpNet || !mpNet.isHost || !mpLobby || mpLobby.count() < 2) return;
+  const players = mpLobby.players();
+  spinState = {
+    order: players.map(p => ({ id: p.id, name: p.name })),
+    remaining: ROLES.slice(),
+    guardAssigned: false,
+    assigned: [],
+    turnIdx: 0,
+    rng: makeRng((Date.now() ^ 0x5bd1e995) >>> 0),
+  };
+  mpNextTurn();
+}
+
+function mpNextTurn() {
+  if (!spinState) return;
+  if (spinState.turnIdx >= spinState.order.length) { mpFinishRoles(); return; }
+  const active = spinState.order[spinState.turnIdx];
+  const msg = { type: 'turn', activeId: active.id, activeName: active.name, roles: spinState.remaining.slice(), assigned: spinState.assigned.slice() };
+  mpNet.broadcast(msg);
+  mpHandleTurn(msg);
+}
+
+function mpDoSpin(byId) {
+  if (!spinState) return;
+  const active = spinState.order[spinState.turnIdx];
+  if (!active || active.id !== byId) return; // only the player whose turn it is can spin
+  const playersLeft = spinState.order.length - spinState.turnIdx;
+  const role = pickSpinRole(spinState.remaining, spinState.guardAssigned, playersLeft, spinState.rng);
+  const durationMs = 3400;
+  const res = { type: 'spinResult', activeId: active.id, activeName: active.name, role, durationMs };
+  mpNet.broadcast(res);
+  mpHandleSpinResult(res);
+  // commit to authoritative state, then advance after the animation settles
+  spinState.remaining.splice(spinState.remaining.indexOf(role), 1);
+  if (role === 'guard') spinState.guardAssigned = true;
+  spinState.assigned.push({ id: active.id, name: active.name, role });
+  spinState.turnIdx++;
+  setTimeout(mpNextTurn, durationMs + 1500);
+}
+
+function mpFinishRoles() {
+  const msg = { type: 'rolesDone', assignments: spinState ? spinState.assigned.slice() : [] };
+  mpNet.broadcast(msg);
+  mpHandleRolesDone(msg);
+  spinState = null;
+}
+
+function onSpinPressed() {
+  if (!mpNet) return;
+  if (mpNet.isHost) mpDoSpin('HOST');
+  else mpNet.send({ type: 'spinPressed' });
+}
+
+// shared rendering reactions (host + clients run the same UI)
+function mpHandleTurn(msg) {
+  mp.showSpin();
+  mp.setWheelRoles(msg.roles);
+  mp.setAssigned(msg.assigned || []);
+  mp.setTurn(msg.activeName, msg.activeId === myMpId());
+}
+function mpHandleSpinResult(msg) {
+  mp.setTurn(msg.activeName, false);        // lock the button while it spins
+  mp.spinResult(msg.role, msg.durationMs, () => {});
+}
+function mpHandleRolesDone(msg) {
+  const mine = (msg.assignments || []).find(a => a.id === myMpId());
+  mp.showRoleReveal(mine ? mine.role : null, msg.assignments);
 }
 
 function gotoMenu() {
