@@ -90,7 +90,7 @@ export const CONFIG = {
   phone: {
     msPerLine: 5200,
     1: [
-      "Uh— hey! Welcome to the night shift at Nano's. Just leaving you a few pointers.",
+      "Uh— hey! Welcome to the night shift at AI Slop. Just leaving you a few pointers.",
       "The pizzeria's mascots… they get a little restless after midnight. Don't worry about it.",
       "You've got a door and a light on each side. Flick a light to peek the window; slam the door if something's there.",
       "It all runs on one breaker, so don't leave everything on — watch that power meter.",
