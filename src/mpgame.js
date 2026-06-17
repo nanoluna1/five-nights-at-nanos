@@ -103,7 +103,7 @@ export function createMpGame({ world, overlay, animHud, audio, net, isHost, myId
   }
   function guardHud(snap) {
     const sl = { clockMinutes: snap.clockMinutes, power: snap.power };
-    return { powerPct: powerPct(sl), usageLoad: snap.usageLoad, clockText: clockText(sl), night, flashlightPct: Math.round(snap.flashPct), camLabel: snap.monitorUp ? snap.activeCam : '—', monitorUp: snap.monitorUp, activeCam: snap.activeCam, doors: snap.doors, lights: snap.lights, jam: snap.jam || {} };
+    return { powerPct: powerPct(sl), usageLoad: snap.usageLoad, clockText: clockText(sl), night, flashlightPct: Math.round(snap.flashPct), camLabel: snap.monitorUp ? snap.activeCam : '—', monitorUp: snap.monitorUp, activeCam: snap.activeCam, doors: snap.doors, lights: snap.lights, jam: snap.jam || {}, cd: snap.cd || {} };
   }
 
   function stopWorker() { if (worker) { try { worker.postMessage('stop'); worker.terminate(); } catch (e) {} worker = null; } if (workerUrl) { try { URL.revokeObjectURL(workerUrl); } catch (e) {} workerUrl = null; } }

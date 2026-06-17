@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createMatch, matchGuard, matchTeleport, matchKill, stepMatch, snapshot, KILL_TIME, REPEL_CD, SPAM_LIMIT, JAM_TIME } from '../src/mpsim.js';
+import { createMatch, matchGuard, matchTeleport, matchKill, stepMatch, snapshot, KILL_TIME, REPEL_CD, DOORLIGHT_CD, JAM_TIME } from '../src/mpsim.js';
 
 const A = [
   { id: 'g', name: 'Guard', role: 'guard' },
@@ -80,23 +80,40 @@ test('multiplayer power is forgiving — a moderate guard load lasts the night',
   assert.ok(m.state.power > 0, 'power should survive a moderate load with the MP rates');
 });
 
-test('spamming a control jams it, blocks input, then recovers (counter resets)', () => {
+test('doors/lights have a cooldown that rate-limits rapid toggles', () => {
   const m = createMatch(1, A);
-  for (let i = 0; i < SPAM_LIMIT; i++) { matchGuard(m, 'door', 'L'); stepMatch(m, 0.1); } // rapid toggling
-  assert.ok(snapshot(m).jam.doorL > 0, 'door L should jam after spamming');
-  const held = m.state.doors.L;
-  matchGuard(m, 'door', 'L');
-  assert.equal(m.state.doors.L, held, 'a jammed control ignores input');
-  for (let i = 0; i < JAM_TIME + 1; i++) stepMatch(m, 1);
-  assert.equal(snapshot(m).jam.doorL, undefined, 'jam clears after JAM_TIME');
-  matchGuard(m, 'door', 'L');
-  assert.notEqual(m.state.doors.L, held, 'control works again once the jam clears');
+  matchGuard(m, 'door', 'L');                 // first toggle: closes
+  assert.equal(m.state.doors.L, true, 'first toggle closes the door');
+  assert.ok(snapshot(m).cd.doorL > 0, 'closing starts the cooldown');
+  stepMatch(m, 0.5);                          // still within DOORLIGHT_CD (1.5s)
+  matchGuard(m, 'door', 'L');                 // second toggle during cooldown: rejected
+  assert.equal(m.state.doors.L, true, 'a toggle during the cooldown is ignored');
+  stepMatch(m, DOORLIGHT_CD);                 // wait the cooldown out
+  matchGuard(m, 'door', 'L');                 // now it opens again
+  assert.equal(m.state.doors.L, false, 'toggling works again once the cooldown clears');
 });
 
-test('paced toggling (1s apart) never jams', () => {
+test('cameras are exempt — no cooldown, no jam, switch freely', () => {
   const m = createMatch(1, A);
-  for (let i = 0; i < 30; i++) { matchGuard(m, 'door', 'L'); stepMatch(m, 1); }
-  assert.equal(snapshot(m).jam.doorL, undefined, 'calm, spaced use should not jam');
+  matchGuard(m, 'monitor', true);             // raise the monitor
+  for (let i = 0; i < 25; i++) { matchGuard(m, 'cam', i % 2 ? 'CAM1B' : 'CAM4'); stepMatch(m, 0.05); } // hammer cam switches
+  const snap = snapshot(m);
+  assert.equal(snap.jam.cam, undefined, 'cameras never jam');
+  assert.equal(snap.cd.cam, undefined, 'cameras have no cooldown');
+  assert.ok(['CAM1B', 'CAM4'].includes(m.state.activeCam), 'cam switching keeps working under rapid input');
+});
+
+test('a jammed control still ignores input until the jam clears (dormant backstop)', () => {
+  const m = createMatch(1, A);
+  m.jamUntil.doorR = m.elapsed + JAM_TIME;    // force a jam directly (the cooldown makes it unreachable via spam now)
+  const held = m.state.doors.R;
+  matchGuard(m, 'door', 'R');
+  assert.equal(m.state.doors.R, held, 'a jammed control ignores input');
+  assert.ok(snapshot(m).jam.doorR > 0, 'snapshot reports the jam');
+  for (let i = 0; i < JAM_TIME + 1; i++) stepMatch(m, 1);
+  assert.equal(snapshot(m).jam.doorR, undefined, 'jam clears after JAM_TIME');
+  matchGuard(m, 'door', 'R');
+  assert.notEqual(m.state.doors.R, held, 'control works again once the jam clears');
 });
 
 test('snapshot is serializable and carries the anim + guard state', () => {

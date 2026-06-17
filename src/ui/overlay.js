@@ -214,15 +214,18 @@ export function createOverlay(rootEl, handlers) {
       camLabel.textContent = 'CAM ' + camName + '  •  SIGNAL…';
       hud.style.opacity = d.powerPct < 25 ? (0.78 + Math.random() * 0.22).toFixed(2) : '1';
       // door/light button active states (and the multiplayer jam overlay)
-      const dl = d.doors || {}, lt = d.lights || {}, jam = d.jam || {};
-      const setCtl = (btn, jammed, active, activeBg, activeBorder, label) => {
+      const dl = d.doors || {}, lt = d.lights || {}, jam = d.jam || {}, cd = d.cd || {};
+      const setCtl = (btn, jammed, cooling, active, activeBg, activeBorder, label) => {
         if (jammed) { btn.style.background = '#2a1c06'; btn.style.borderColor = '#e8b23a'; btn.style.color = '#e8b23a'; btn.textContent = 'JAMMED ' + Math.ceil(jammed) + 's'; }
-        else { btn.style.background = active ? activeBg : '#15151a'; btn.style.borderColor = active ? activeBorder : '#34333c'; btn.style.color = '#cfcabb'; btn.textContent = label; }
+        else { // a cooling-down control keeps its open/closed look but dims and shows a countdown
+          btn.style.background = active ? activeBg : '#15151a'; btn.style.borderColor = active ? activeBorder : '#34333c';
+          btn.style.color = cooling ? '#8a8a90' : '#cfcabb'; btn.textContent = cooling ? (label + '  ' + Math.ceil(cooling) + 's') : label;
+        }
       };
-      setCtl(ctlL.door, jam.doorL, dl.L, '#5a1e1e', '#e24b4a', 'DOOR');
-      setCtl(ctlR.door, jam.doorR, dl.R, '#5a1e1e', '#e24b4a', 'DOOR');
-      setCtl(ctlL.light, jam.lightL, lt.L, '#5a4a1a', '#e8b23a', 'LIGHT');
-      setCtl(ctlR.light, jam.lightR, lt.R, '#5a4a1a', '#e8b23a', 'LIGHT');
+      setCtl(ctlL.door, jam.doorL, cd.doorL, dl.L, '#5a1e1e', '#e24b4a', 'DOOR');
+      setCtl(ctlR.door, jam.doorR, cd.doorR, dl.R, '#5a1e1e', '#e24b4a', 'DOOR');
+      setCtl(ctlL.light, jam.lightL, cd.lightL, lt.L, '#5a4a1a', '#e8b23a', 'LIGHT');
+      setCtl(ctlR.light, jam.lightR, cd.lightR, lt.R, '#5a4a1a', '#e8b23a', 'LIGHT');
       const NAMES = { doorL: 'Door L', doorR: 'Door R', lightL: 'Light L', lightR: 'Light R', cam: 'Cameras' };
       const jamParts = [];
       for (const k of ['doorL', 'doorR', 'lightL', 'lightR', 'cam']) if (jam[k]) jamParts.push(NAMES[k] + ' ' + Math.ceil(jam[k]) + 's');
