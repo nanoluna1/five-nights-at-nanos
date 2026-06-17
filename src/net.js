@@ -46,16 +46,31 @@ export function createLoopbackClient(code, hooks = {}) {
 
 // ---------------- PeerJS (real P2P) ----------------
 const PEERJS_CDN = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
-// STUN only (no TURN). This handles ordinary home/Wi-Fi NATs; friends on strict/symmetric NATs
-// (often mobile data) can't form a direct link and will time out with a clear message — adding a
-// working TURN relay later (e.g. a free Metered account) would cover those too.
-const ICE = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-  ],
-};
+// ICE servers: Google STUN (fast, covers ordinary home/Wi-Fi NATs) PLUS a Metered TURN relay, so
+// friends on strict/symmetric NATs (often mobile data) — who can't form a direct link — connect by
+// relaying through the TURN server instead of timing out. The TURN credentials are fetched once at
+// runtime from Metered's REST API (it returns the correct region-routed turn: URLs + username/
+// credential). If that fetch ever fails we degrade to STUN-only: ordinary NATs still work; only
+// strict NATs lose the relay.
+const METERED_TURN_API = 'https://fivenightsatnanos.metered.live/api/v1/turn/credentials?apiKey=a82b3508a78c1fcb78a182436930071f55c7';
+const STUN_ONLY = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+];
+let iceServersPromise = null;
+function getIceServers() {
+  if (iceServersPromise) return iceServersPromise;
+  iceServersPromise = (async () => {
+    try {
+      const res = await fetch(METERED_TURN_API);
+      const turn = await res.json();
+      if (Array.isArray(turn) && turn.length) return STUN_ONLY.concat(turn);
+    } catch (e) {}
+    return STUN_ONLY.slice(); // TURN fetch failed — degrade to STUN-only
+  })();
+  return iceServersPromise;
+}
 const CONNECT_TIMEOUT_MS = 18000; // give up (with a message) instead of hanging forever
 let peerLibPromise = null;
 function loadPeerJS() {
@@ -73,7 +88,7 @@ function loadPeerJS() {
 
 export async function createPeerHost(code, hooks = {}) {
   const Peer = await loadPeerJS();
-  const peer = new Peer(code, { config: ICE }); // the room code is our peer id
+  const peer = new Peer(code, { config: { iceServers: await getIceServers() } }); // the room code is our peer id
   const conns = new Map();
   let opened = false, closed = false;
   // The public PeerJS broker drops idle peers after a few minutes — which would make the room code
@@ -107,9 +122,9 @@ export async function createPeerHost(code, hooks = {}) {
 
 // A standalone ICE probe so we can SEE, on a given network, which candidate types are reachable —
 // host (LAN), srflx (STUN), relay (TURN). No relay => TURN isn't usable here, which explains a hang.
-function probeIce(log) {
+function probeIce(log, iceServers) {
   try {
-    const pc = new RTCPeerConnection(ICE);
+    const pc = new RTCPeerConnection({ iceServers });
     pc.createDataChannel('probe');
     const seen = {};
     pc.onicecandidate = (e) => { if (e.candidate) { const m = e.candidate.candidate.match(/typ (\w+)/); if (m && !seen[m[1]]) { seen[m[1]] = true; log('· ICE candidate: ' + m[1] + (m[1] === 'relay' ? '  ✓ TURN works' : '')); } } };
@@ -122,8 +137,9 @@ export async function createPeerClient(code, hooks = {}) {
   const log = (s) => hooks.onLog && hooks.onLog(s);
   log('loading peerjs…');
   const Peer = await loadPeerJS();
-  log('checking this network (ICE)…'); probeIce(log);
-  const peer = new Peer(undefined, { config: ICE });
+  const iceServers = await getIceServers();
+  log('checking this network (ICE)…'); probeIce(log, iceServers);
+  const peer = new Peer(undefined, { config: { iceServers } });
   return new Promise((resolve) => {
     let settled = false;
     const done = (val) => { if (settled) return; settled = true; clearTimeout(to); resolve(val); };
