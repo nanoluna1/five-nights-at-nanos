@@ -51,6 +51,8 @@ const overlay = createOverlay(app, {
 // roster snapshots it broadcasts. Slice 2 will add the spin wheel; Slice 3 the synced night.
 let mpNet = null;     // active transport (host or client endpoint)
 let mpLobby = null;   // host-only roster
+let mpCode = null;    // current room code (kept so we can return to the lobby after a match)
+let lastRoster = [];  // most recent roster seen (so both host & clients can rebuild the lobby)
 let myName = 'Nano';
 
 const mp = createMpMenu(app, {
@@ -115,6 +117,7 @@ window.addEventListener('keydown', (e) => {
 function hostGame(name) {
   myName = (name || '').trim() || 'Nano';
   const code = makeRoomCode();
+  mpCode = code;
   mpLobby = createLobby();
   mpLobby.add('HOST', myName, true);
   mp.showHostLobby(code);
@@ -127,8 +130,9 @@ function hostGame(name) {
       if (!msg) return;
       if (msg.type === 'hello') {
         mpLobby.add(id, msg.name);
-        if (mpNet) mpNet.broadcast({ type: 'roster', players: mpLobby.players() });
-        mp.setRoster(mpLobby.players(), { isHost: true });
+        lastRoster = mpLobby.players();
+        if (mpNet) mpNet.broadcast({ type: 'roster', players: lastRoster });
+        mp.setRoster(lastRoster, { isHost: true });
       } else if (msg.type === 'spinPressed') {
         mpDoSpin(id); // the host validates it's actually this client's turn
       } else if (msg.type === 'input' && mpGame) {
@@ -139,14 +143,16 @@ function hostGame(name) {
     },
     onLeave: (id) => {
       mpLobby.remove(id);
-      if (mpNet) mpNet.broadcast({ type: 'roster', players: mpLobby.players() });
-      mp.setRoster(mpLobby.players(), { isHost: true });
+      lastRoster = mpLobby.players();
+      if (mpNet) mpNet.broadcast({ type: 'roster', players: lastRoster });
+      mp.setRoster(lastRoster, { isHost: true });
     },
   }).then((host) => { mpNet = host; }).catch(() => mp.setStatus('Could not open room. Are you offline?'));
 }
 
 function joinGame(code) {
   if (!code) { mp.setJoinStatus('Enter a room code'); return; }
+  mpCode = code;
   mp.setJoinStatus('Connecting…');
   mp.clearJoinLog(); mp.joinLog('connecting to room ' + code);
   createPeerClient(code, {
@@ -154,6 +160,8 @@ function joinGame(code) {
     onMessage: (msg) => {
       if (!msg) return;
       if (msg.type === 'roster') {
+        lastRoster = msg.players;
+        if (mpGame && mpGame.isActive()) return; // mid-match/cinematic update — just remember it, don't yank the screen
         mp.showHostLobby(code);
         mp.setRoster(msg.players, { isHost: false });
         mp.setStatus('In the lobby — waiting for the host to start');
@@ -248,7 +256,21 @@ function beginMatch(night, assignments) {
 
 function endMatch(snap, myRole) {
   mp.showMatchOver(snap.winner, myRole, snap.killerName); // covers the game (z-index above the HUD)
-  setTimeout(() => { teardownMp(); mp.hide(); overlay.showMenu(loadSave(store)); }, 5500);
+  setTimeout(returnToLobby, 5500);
+}
+
+// After a match, keep the connection + roster alive and drop everyone back into the lobby (host can
+// press Start to play again). Only per-match state is cleared. If the connection is gone, fall back
+// to the main menu.
+function returnToLobby() {
+  mpGame = null; mpAssignments = null; spinState = null;
+  if (!mpNet) { mp.hide(); overlay.showMenu(loadSave(store)); return; }
+  const isHost = !!mpNet.isHost;
+  overlay.hideAllScreens();
+  if (isHost && mpLobby) { lastRoster = mpLobby.players(); mpNet.broadcast({ type: 'roster', players: lastRoster }); }
+  mp.showHostLobby(mpCode);
+  mp.setRoster(lastRoster, { isHost });
+  mp.setStatus(isHost ? 'Match over — press Start to play again' : 'Match over — waiting for the host to start');
 }
 
 function onSpinPressed() {

@@ -164,7 +164,7 @@ export function createMpMenu(rootEl, hooks = {}) {
   const overTitle = el('div', 'font-size:60px;font-weight:bold;letter-spacing:2px;text-align:center;', '');
   const overSub = el('div', 'font-size:24px;margin-top:12px;color:#cfcabb;', '');
   over.appendChild(overTitle); over.appendChild(overSub);
-  over.appendChild(el('div', 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);font-size:14px;color:#6a6a72;', 'returning to the menu…'));
+  over.appendChild(el('div', 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);font-size:14px;color:#6a6a72;', 'returning to the lobby…'));
   root.appendChild(over);
 
   function showScreen(which) {

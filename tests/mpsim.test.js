@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createMatch, matchGuard, matchTeleport, matchKill, stepMatch, snapshot, KILL_TIME, REPEL_CD, DOORLIGHT_CD, JAM_TIME } from '../src/mpsim.js';
+import { createMatch, matchGuard, matchTeleport, matchKill, stepMatch, snapshot, KILL_TIME, REPEL_CD, DOORLIGHT_CD, SPAM_LIMIT, JAM_TIME } from '../src/mpsim.js';
 
 const A = [
   { id: 'g', name: 'Guard', role: 'guard' },
@@ -103,17 +103,30 @@ test('cameras are exempt — no cooldown, no jam, switch freely', () => {
   assert.ok(['CAM1B', 'CAM4'].includes(m.state.activeCam), 'cam switching keeps working under rapid input');
 });
 
-test('a jammed control still ignores input until the jam clears (dormant backstop)', () => {
+test('hammering a control past the limit jams it for the long JAM_TIME (25s), then recovers', () => {
   const m = createMatch(1, A);
-  m.jamUntil.doorR = m.elapsed + JAM_TIME;    // force a jam directly (the cooldown makes it unreachable via spam now)
+  for (let i = 0; i < SPAM_LIMIT; i++) { matchGuard(m, 'door', 'R'); stepMatch(m, DOORLIGHT_CD); } // toggle as fast as the cooldown allows
+  const jam = snapshot(m).jam.doorR;
+  assert.ok(jam > 0, 'sustained hammering trips the jam');
+  assert.ok(jam > 15, 'jam lasts the long JAM_TIME (25s), not the old 15s');
   const held = m.state.doors.R;
   matchGuard(m, 'door', 'R');
   assert.equal(m.state.doors.R, held, 'a jammed control ignores input');
-  assert.ok(snapshot(m).jam.doorR > 0, 'snapshot reports the jam');
   for (let i = 0; i < JAM_TIME + 1; i++) stepMatch(m, 1);
   assert.equal(snapshot(m).jam.doorR, undefined, 'jam clears after JAM_TIME');
   matchGuard(m, 'door', 'R');
   assert.notEqual(m.state.doors.R, held, 'control works again once the jam clears');
+});
+
+test('snapshot carries the killer role + power-out flag for the end cinematic', () => {
+  const m = createMatch(1, A);
+  moveTo(m, 'r', 'CAM1B', 'CAM4', 'DOOR_R'); // arg walks to the right door
+  matchKill(m, m.anims.arg.id);
+  for (let i = 0; i < KILL_TIME + 1; i++) stepMatch(m, 1); // door left open → the kill lands
+  const snap = snapshot(m);
+  assert.equal(snap.winner, 'animatronics');
+  assert.equal(snap.killerRole, 'arg', 'killer role is reported so the guard sees Arg’s jumpscare');
+  assert.equal(snap.byPowerOut, false, 'a door kill is not a power-out');
 });
 
 test('snapshot is serializable and carries the anim + guard state', () => {

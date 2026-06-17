@@ -41,12 +41,13 @@ export const REPEL_CD = 9.0;      // a slammed door sends you back to the stage 
 // input for DOORLIGHT_CD seconds — so a guard can't machine-gun the doors/lights. Cameras are
 // exempt (switch/raise freely). This is the active anti-spam limiter.
 export const DOORLIGHT_CD = 1.5;
-// Legacy backstop (kept on doors/lights, removed from cams): toggling a control SPAM_LIMIT times
-// within SPAM_WINDOW seconds jams it for JAM_TIME seconds. With the cooldown above you can't fit
-// SPAM_LIMIT toggles into the window anymore, so this rarely/never fires now — it's a safety net.
-export const SPAM_LIMIT = 20;
+// Backstop on top of the cooldown (doors/lights only; cams exempt): if a guard keeps HAMMERING one
+// control — SPAM_LIMIT toggles within SPAM_WINDOW seconds, i.e. machine-gunning it at the cooldown's
+// pace for ~12s — that control locks up for JAM_TIME seconds. Normal play never reaches it; only
+// sustained spamming does. The counter resets the moment a jam fires.
+export const SPAM_LIMIT = 8;
 export const SPAM_WINDOW = 15;
-export const JAM_TIME = 15;
+export const JAM_TIME = 25;
 
 function doorOf(node) { return node === 'DOOR_L' ? 'L' : node === 'DOOR_R' ? 'R' : null; }
 
@@ -76,6 +77,8 @@ export function createMatch(night, assignments) {
     phase: 'playing',
     winner: null,
     killerName: null,
+    killerRole: null,  // which animatronic role got the kill (drives the guard's jumpscare)
+    byPowerOut: false, // true if the guard lost by running out of power (→ Har power-out cinematic)
   };
 }
 
@@ -156,12 +159,12 @@ export function stepMatch(m, dt) {
       // a closed door on that side would have repelled already; if still open at 0 -> they win
       a.killTimer -= dt;
       if (a.killTimer <= 0) {
-        if (a.atDoor && !s.doors[a.atDoor]) { m.phase = 'over'; m.winner = 'animatronics'; m.killerName = a.name; return; }
+        if (a.atDoor && !s.doors[a.atDoor]) { m.phase = 'over'; m.winner = 'animatronics'; m.killerName = a.name; m.killerRole = name; return; }
         a.killTimer = 0; // door shut in time (belt-and-suspenders; repel usually handles it)
       }
     }
   }
-  if (shutdown) { m.phase = 'over'; m.winner = 'animatronics'; m.killerName = 'the dark'; return; }
+  if (shutdown) { m.phase = 'over'; m.winner = 'animatronics'; m.killerName = 'the dark'; m.killerRole = 'har'; m.byPowerOut = true; return; }
   if (clockHour(s) >= 6) { m.phase = 'over'; m.winner = 'guard'; }
 }
 
@@ -187,5 +190,6 @@ export function snapshot(m) {
     doors: { ...s.doors }, lights: { ...s.lights }, monitorUp: s.monitorUp, activeCam: s.activeCam,
     flashOn: s.flashlight.on, flashPct: s.flashlight.charge,
     anims, jam, cd, phase: m.phase, winner: m.winner, killerName: m.killerName,
+    killerRole: m.killerRole, byPowerOut: m.byPowerOut,
   };
 }

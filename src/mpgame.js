@@ -24,7 +24,8 @@ export function createMpGame({ world, overlay, animHud, audio, net, isHost, myId
   let match = isHost ? createMatch(night, assignments) : null;
   let lastSnap = isHost ? snapshot(match) : null;
   const acc = makeAccumulator(CONFIG.ai.tickHz);
-  let snapTimer = 0, ended = false, finished = false;
+  let snapTimer = 0, ended = false, finished = false, ending = false;
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
   const TELL = audio ? { har: () => audio.harTell(), gi: () => audio.giTell(), cluck: () => audio.cluckTell(), arg: () => audio.argTell() } : {};
   let worker = null, workerUrl = null, lastTick = 0;
   let prevA = null; // last snapshot we played audio against
@@ -62,10 +63,12 @@ export function createMpGame({ world, overlay, animHud, audio, net, isHost, myId
 
   function render(dt) {
     if (!lastSnap) return;
-    stepAudio(lastSnap);
+    if (!ending) stepAudio(lastSnap);
     world.dimForPower(Math.max(0, (lastSnap.power || 0) / 100));
-    if (isGuard) { world.render(guardStateFrom(lastSnap), dt); overlay.updateHUD(guardHud(lastSnap)); }
-    else { world.renderAnimView(lastSnap, myRole, dt); animHud.update(lastSnap, myRole); }
+    // While the end cinematic plays we keep rendering the guard's office so the jumpscare/power-out
+    // animation runs, but freeze the HUD/anim-HUD (it's hidden anyway).
+    if (isGuard) { world.render(guardStateFrom(lastSnap), dt); if (!ending) overlay.updateHUD(guardHud(lastSnap)); }
+    else { world.renderAnimView(lastSnap, myRole, dt); if (!ending) animHud.update(lastSnap, myRole); }
   }
 
   // Play sounds for whatever changed since we last looked.
@@ -108,11 +111,34 @@ export function createMpGame({ world, overlay, animHud, audio, net, isHost, myId
 
   function stopWorker() { if (worker) { try { worker.postMessage('stop'); worker.terminate(); } catch (e) {} worker = null; } if (workerUrl) { try { URL.revokeObjectURL(workerUrl); } catch (e) {} workerUrl = null; } }
 
+  // End-of-match cinematic. If I'm the guard and I lost, play the real scare on the canvas (the
+  // creature's jumpscare, or — on a power-out — Har's eyes + music-box dread + Har's jumpscare,
+  // mirrored from single-player). Everyone else just gets the win/lose sound. `ending` keeps the
+  // render loop alive (isActive stays true) so the animation runs; `finished` flips only when done.
   function finish(snap) {
-    if (finished) return; finished = true;
+    if (ending) return; ending = true;
     stopWorker();
-    if (audio) audio.oneShot(snap && snap.winner === 'guard' ? 'winChime' : 'jumpscare');
-    setTimeout(() => { animHud.hide(); onEnd && onEnd(snap, myRole); }, 250);
+    runEndCinematic(snap);
+  }
+  async function runEndCinematic(snap) {
+    const guardLost = !!(snap && snap.winner === 'animatronics');
+    if (isGuard && guardLost) {
+      overlay.hideAllScreens(); // drop the HUD so the canvas scare is clean
+      if (snap.byPowerOut) {
+        if (world.showPowerOutEyes) world.showPowerOutEyes();              // Har looms at the left door
+        if (audio && audio.powerOutSequence) await audio.powerOutSequence(CONFIG.powerout); // march in the dark
+        await wait(CONFIG.powerout.quietMs);                               // dead silence
+        if (world.clearPowerOutEyes) world.clearPowerOutEyes();
+      }
+      if (audio) audio.oneShot('jumpscare');
+      if (world.playJumpscare) await world.playJumpscare(snap.killerRole || 'har');
+    } else {
+      if (audio) audio.oneShot(snap && snap.winner === 'guard' ? 'winChime' : 'jumpscare');
+      await wait(250);
+    }
+    finished = true; // now the render loop can stop; hand off to the match-over screen
+    animHud.hide();
+    onEnd && onEnd(snap, myRole);
   }
 
   return {
