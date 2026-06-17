@@ -46,17 +46,14 @@ export function createLoopbackClient(code, hooks = {}) {
 
 // ---------------- PeerJS (real P2P) ----------------
 const PEERJS_CDN = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
-// STUN for ordinary NAT traversal + free TURN relays as a fallback for strict/symmetric NATs
-// (mobile data, locked-down Wi-Fi) where a direct P2P link can't form and the join would otherwise
-// hang on "Connecting…". ICE picks whichever candidate works and skips dead ones.
+// STUN only (no TURN). This handles ordinary home/Wi-Fi NATs; friends on strict/symmetric NATs
+// (often mobile data) can't form a direct link and will time out with a clear message — adding a
+// working TURN relay later (e.g. a free Metered account) would cover those too.
 const ICE = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:80?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'stun:stun2.l.google.com:19302' },
   ],
 };
 const CONNECT_TIMEOUT_MS = 18000; // give up (with a message) instead of hanging forever
