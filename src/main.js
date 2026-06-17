@@ -148,7 +148,9 @@ function hostGame(name) {
 function joinGame(code) {
   if (!code) { mp.setJoinStatus('Enter a room code'); return; }
   mp.setJoinStatus('Connecting…');
+  mp.clearJoinLog(); mp.joinLog('connecting to room ' + code);
   createPeerClient(code, {
+    onLog: (s) => mp.joinLog(s),
     onMessage: (msg) => {
       if (!msg) return;
       if (msg.type === 'roster') {

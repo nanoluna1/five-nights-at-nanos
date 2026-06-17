@@ -120,6 +120,11 @@ export function createMpMenu(rootEl, hooks = {}) {
   landing.appendChild(landJoinBtn);
   root.appendChild(landing);
 
+  // connection diagnostic log (shown while joining so a stuck connect tells us where it failed)
+  const diagLog = el('div', 'position:absolute;left:24px;bottom:20px;width:610px;max-height:240px;overflow:hidden;font-family:monospace;font-size:12px;color:#7aa7d8;background:rgba(0,0,0,0.66);border:1px solid #2a2a30;padding:8px 10px;display:none;white-space:pre-wrap;line-height:1.45;');
+  root.appendChild(diagLog);
+  let diagLines = [];
+
   // ===== SPIN (role wheel) =====
   const spin = el('div', 'position:absolute;inset:0;display:none;');
   const spinHdr = el('div', 'position:absolute;top:38px;left:50%;transform:translateX(-50%);text-align:center;');
@@ -201,7 +206,9 @@ export function createMpMenu(rootEl, hooks = {}) {
   return {
     showHome() { showScreen('home'); nameInput.focus(); },
     showJoinEntry() { showScreen('join'); joinStatus.textContent = ''; codeInput.focus(); },
-    showHostLobby(code) { showScreen('lobby'); codeText.textContent = code; shareLink = location.origin + location.pathname + '?join=' + code; linkText.textContent = shareLink; },
+    showHostLobby(code) { showScreen('lobby'); diagLog.style.display = 'none'; codeText.textContent = code; shareLink = location.origin + location.pathname + '?join=' + code; linkText.textContent = shareLink; },
+    joinLog(line) { diagLines.push(line); while (diagLines.length > 13) diagLines.shift(); diagLog.textContent = diagLines.join('\n'); diagLog.style.display = 'block'; },
+    clearJoinLog() { diagLines = []; diagLog.textContent = ''; diagLog.style.display = 'none'; },
     showJoinLanding(code) { showScreen('landing'); landingRoom.textContent = 'Joining room:  ' + code; landName.value = ''; landStatus.textContent = ''; updateLandJoin(); landName.focus(); },
     setRoster(players, opts) { renderRoster(players, opts); },
     // ---- spin wheel ----

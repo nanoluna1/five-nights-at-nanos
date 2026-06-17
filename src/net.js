@@ -108,25 +108,41 @@ export async function createPeerHost(code, hooks = {}) {
   };
 }
 
+// A standalone ICE probe so we can SEE, on a given network, which candidate types are reachable —
+// host (LAN), srflx (STUN), relay (TURN). No relay => TURN isn't usable here, which explains a hang.
+function probeIce(log) {
+  try {
+    const pc = new RTCPeerConnection(ICE);
+    pc.createDataChannel('probe');
+    const seen = {};
+    pc.onicecandidate = (e) => { if (e.candidate) { const m = e.candidate.candidate.match(/typ (\w+)/); if (m && !seen[m[1]]) { seen[m[1]] = true; log('· ICE candidate: ' + m[1] + (m[1] === 'relay' ? '  ✓ TURN works' : '')); } } };
+    pc.createOffer().then((o) => pc.setLocalDescription(o)).catch(() => {});
+    setTimeout(() => { log('· ICE result: [' + (Object.keys(seen).join(', ') || 'none') + ']' + (seen.relay ? '' : '  — NO RELAY (TURN unavailable on this network)')); try { pc.close(); } catch (e) {} }, 8000);
+  } catch (e) { log('· ICE probe failed: ' + e.message); }
+}
+
 export async function createPeerClient(code, hooks = {}) {
+  const log = (s) => hooks.onLog && hooks.onLog(s);
+  log('loading peerjs…');
   const Peer = await loadPeerJS();
+  log('checking this network (ICE)…'); probeIce(log);
   const peer = new Peer(undefined, { config: ICE });
   return new Promise((resolve) => {
     let settled = false;
     const done = (val) => { if (settled) return; settled = true; clearTimeout(to); resolve(val); };
-    const to = setTimeout(() => { try { if (!peer.destroyed) peer.destroy(); } catch (e) {} done(null); }, CONNECT_TIMEOUT_MS);
+    const to = setTimeout(() => { log('TIMED OUT after ' + (CONNECT_TIMEOUT_MS / 1000) + 's — no connection'); try { if (!peer.destroyed) peer.destroy(); } catch (e) {} done(null); }, CONNECT_TIMEOUT_MS);
     peer.on('open', () => {
+      log('peer open (' + peer.id + ') — connecting to host ' + code + '…');
       const conn = peer.connect(code, { reliable: true });
-      conn.on('open', () => {
-        hooks.onReady && hooks.onReady();
-        done({ id: peer.id, send: (m) => conn.send(m), close: () => { try { conn.close(); peer.destroy(); } catch (e) {} } });
-      });
+      setTimeout(() => { const rpc = conn.peerConnection; if (rpc) rpc.oniceconnectionstatechange = () => log('webrtc state: ' + rpc.iceConnectionState); }, 600);
+      conn.on('open', () => { log('CONNECTED ✓'); hooks.onReady && hooks.onReady(); done({ id: peer.id, send: (m) => conn.send(m), close: () => { try { conn.close(); peer.destroy(); } catch (e) {} } }); });
       conn.on('data', (msg) => { if (msg && msg.type === '__ping') return; hooks.onMessage && hooks.onMessage(msg); });
-      conn.on('close', () => hooks.onClose && hooks.onClose());
+      conn.on('close', () => { log('data channel closed'); hooks.onClose && hooks.onClose(); });
     });
-    peer.on('disconnected', () => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} });
+    peer.on('disconnected', () => { log('lost broker — reconnecting…'); try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} });
     peer.on('error', (e) => {
       const t = e && e.type ? e.type : String(e);
+      log('peer error: ' + t);
       if (settled && (t === 'network' || t === 'disconnected')) { try { if (!peer.destroyed) peer.reconnect(); } catch (e2) {} return; }
       hooks.onError && hooks.onError(t);
       done(null);
