@@ -19,7 +19,7 @@ export function createMpMenu(rootEl, hooks = {}) {
 
   function titleBlock(parent) {
     parent.appendChild(el('div', "font-size:54px;font-weight:bold;letter-spacing:2px;color:#e6e2d6;text-shadow:0 0 18px rgba(0,0,0,0.9);", 'Five Nights'));
-    parent.appendChild(el('div', "font-size:38px;font-weight:bold;margin-left:50px;color:#e6e2d6;text-shadow:0 0 18px rgba(0,0,0,0.9);", "at Nano's"));
+    parent.appendChild(el('div', "font-size:38px;font-weight:bold;margin-left:50px;color:#e6e2d6;text-shadow:0 0 18px rgba(0,0,0,0.9);", "At AI Slop"));
     parent.appendChild(el('div', "font-size:22px;letter-spacing:5px;color:#e8b23a;margin-top:10px;", '( Multiplayer )'));
   }
   const btnCss = 'padding:10px 22px;border:1px solid #34333c;background:#15151a;color:#cfcabb;font-size:20px;letter-spacing:1px;cursor:pointer;border-radius:6px;transition:background .1s,border-color .1s,color .1s;';
@@ -49,7 +49,7 @@ export function createMpMenu(rootEl, hooks = {}) {
 
   // ===== HOST LOBBY =====
   const lobby = el('div', 'position:absolute;inset:0;display:none;');
-  lobby.appendChild(el('div', 'position:absolute;top:24px;left:30px;font-size:16px;letter-spacing:2px;color:#5a5a62;', "Nano's  ·  Multiplayer"));
+  lobby.appendChild(el('div', 'position:absolute;top:24px;left:30px;font-size:16px;letter-spacing:2px;color:#5a5a62;', "AI Slop  ·  Multiplayer"));
   const codeWrap = el('div', 'position:absolute;top:44px;left:50%;transform:translateX(-50%);text-align:center;');
   codeWrap.appendChild(el('div', 'font-size:12px;letter-spacing:3px;color:#8a8a90;', 'ROOM CODE — SHARE IT'));
   const codeText = el('div', 'font-size:42px;font-weight:bold;letter-spacing:3px;color:#e8b23a;margin-top:6px;cursor:pointer;', '—');

@@ -17,7 +17,7 @@ export function createOverlay(rootEl, handlers) {
   const menu = el('div', 'position:absolute;inset:0;background:#050507;display:flex;flex-direction:column;justify-content:center;padding-left:9%;pointer-events:auto;');
   const menuGrain = el('div', 'position:absolute;inset:0;pointer-events:none;' + grainCss); menu.appendChild(menuGrain);
   const title1 = el('div', "font-size:64px;font-weight:bold;letter-spacing:2px;color:#e6e2d6;text-shadow:0 0 18px rgba(0,0,0,0.9);position:relative;", 'Five Nights');
-  const title2 = el('div', "font-size:46px;font-weight:bold;margin-left:60px;color:#e6e2d6;text-shadow:0 0 18px rgba(0,0,0,0.9);position:relative;", "at Nano's");
+  const title2 = el('div', "font-size:46px;font-weight:bold;margin-left:60px;color:#e6e2d6;text-shadow:0 0 18px rgba(0,0,0,0.9);position:relative;", "At AI Slop");
   menu.appendChild(title1); menu.appendChild(title2);
   const menuRows = el('div', 'position:relative;margin-top:46px;');
   menu.appendChild(menuRows);
